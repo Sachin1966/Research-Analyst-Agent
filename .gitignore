@@ -6,7 +6,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# MLflow tracking local files
+mlruns/
+mlflow.db
+
 # IDE & OS junk
+
 .vscode/
 .idea/
 .DS_Store
