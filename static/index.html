@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Multi-Agent Research Assistant</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Styled CSS -->
+    <link rel="stylesheet" href="app.css">
+    <!-- Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Settings -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    <span>Research Agent</span>
+                </div>
+                <span class="version-tag">v2.0</span>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Configuration</h3>
+                
+                <div class="form-group">
+                    <label for="model-select">Ollama Model</label>
+                    <div class="select-wrapper">
+                        <select id="model-select">
+                            <option value="">Loading models...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="status-list">
+                    <div class="status-item">
+                        <span>Ollama Connection</span>
+                        <span id="ollama-status" class="status-badge offline">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Web Search (Tavily)</span>
+                        <span id="tavily-status" class="status-badge offline">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Operation Mode</span>
+                        <span id="mode-status" class="status-badge offline">Checking...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section fill-height">
+                <h3>Research History</h3>
+                <div id="history-list" class="history-list">
+                    <p class="empty-history">No previous runs in this session.</p>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <p>Ollama Multi-Agent Orchestrator</p>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-workspace">
+            <header class="workspace-header">
+                <div class="header-title">
+                    <h1>Multi-Agent Research Assistant</h1>
+                    <p>Harnessing local Ollama models in cooperative pipeline networks</p>
+                </div>
+                <div class="header-actions">
+                    <span id="elapsed-timer" class="timer-display">00:00.0</span>
+                </div>
+            </header>
+
+            <section class="search-panel">
+                <div class="search-box-container">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="query-input" placeholder="Ask a complex research question... (e.g. How does quantum computing cryptography work?)" value="How do multi-agent LLM systems work and where are they used in production?">
+                    <button id="run-btn" class="btn-primary">
+                        <span>Execute Pipeline</span>
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Results Display Dashboard (Hidden by default, shown when running/done) -->
+            <div id="dashboard-results" class="dashboard-results hidden">
+                
+                <!-- Live Pipeline Stepper/Logs -->
+                <div class="card glass status-card">
+                    <div class="card-header">
+                        <h2 class="section-title">
+                            <span class="pulse-indicator red" id="status-pulse"></span>
+                            Pipeline Status: <span id="pipeline-status-text">Idle</span>
+                        </h2>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="pipeline-progress" class="progress-bar" style="width: 0%"></div>
+                    </div>
+                    <div id="status-logs" class="status-logs">
+                        <div class="log-entry">Waiting for user input...</div>
+                    </div>
+                </div>
+
+                <!-- Step 1: Orchestrator Sub-questions -->
+                <div id="orchestrator-section" class="card glass hidden">
+                    <div class="card-header">
+                        <h2>1. Orchestrator Decompositions</h2>
+                        <span class="agent-badge orchestrator">Orchestrator Agent</span>
+                    </div>
+                    <p class="section-desc">The orchestrator analyzed the query and split it into the following concurrent sub-questions:</p>
+                    <div id="sub-questions-container" class="sub-questions-grid">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+                <!-- Step 2: Workers Parallel Execution -->
+                <div id="workers-section" class="card glass hidden">
+                    <div class="card-header">
+                        <h2>2. Worker Agents (Concurrent Research)</h2>
+                        <span class="agent-badge worker">Worker Agents</span>
+                    </div>
+                    <div id="workers-grid" class="workers-grid">
+                        <!-- Filled dynamically by JS -->
+                    </div>
+                </div>
+
+                <!-- Step 3: Synthesized Final Report -->
+                <div id="synthesizer-section" class="card glass hidden">
+                    <div class="card-header">
+                        <h2>3. Final Synthesized Report</h2>
+                        <div class="header-controls">
+                            <span class="agent-badge synthesizer">Synthesizer Agent</span>
+                            <button id="copy-btn" class="btn-secondary btn-sm" title="Copy to Clipboard">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-small-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                Copy
+                            </button>
+                            <button id="download-btn" class="btn-secondary btn-sm" title="Download Markdown">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-small-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>
+                                Download
+                            </button>
+                        </div>
+                    </div>
+                    <div class="report-content markdown-body" id="final-report-content">
+                        <!-- Rendered Markdown goes here -->
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Main JavaScript Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
