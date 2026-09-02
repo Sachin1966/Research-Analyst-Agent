@@ -97,7 +97,9 @@ app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
+    host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", 8000))
-    print(f"Starting Multi-Agent Research Assistant FastAPI Backend on port {port}...")
-    uvicorn.run("backend:app", host="0.0.0.0", port=port)
+    print(f"Starting Multi-Agent Research Assistant FastAPI Backend on http://{host}:{port}...")
+    uvicorn.run("backend:app", host=host, port=port)
+
 
