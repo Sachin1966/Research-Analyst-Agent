@@ -14,35 +14,59 @@ import requests
 import asyncio
 import queue
 import threading
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
+load_dotenv()
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "llama3:latest")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# Check if we should run in DEMO_MODE (either manually requested, or if Ollama is offline)
+# Check if we should run in DEMO_MODE (either manually requested, or if no LLM service is available)
 DEMO_MODE = os.environ.get("DEMO_MODE") == "1"
 
-if not DEMO_MODE:
+if not DEMO_MODE and not GEMINI_API_KEY:
     try:
         # Check if Ollama is accessible
         response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=2)
         if response.status_code != 200:
-            print("Ollama returned non-200 status code. Running in DEMO_MODE.")
+            print("Ollama returned non-200 status code and no GEMINI_API_KEY found. Running in DEMO_MODE.")
             DEMO_MODE = True
     except Exception as e:
-        print(f"Cannot connect to Ollama at {OLLAMA_URL} ({e}). Running in DEMO_MODE.")
+        print(f"Cannot connect to Ollama at {OLLAMA_URL} and no GEMINI_API_KEY found ({e}). Running in DEMO_MODE.")
         DEMO_MODE = True
 
 
+
 async def call_llm_stream(system: str, user: str, model: str = None):
-    """Async generator to stream response from local Ollama line-by-line."""
+    """Async generator to stream response from Gemini or local Ollama line-by-line."""
     if DEMO_MODE:
         response = _demo_response(system, user)
-        # Yield in chunks of ~20 characters to simulate real streaming
         chunk_size = 20
         for i in range(0, len(response), chunk_size):
             yield response[i:i+chunk_size]
             await asyncio.sleep(0.03)
         return
+
+    if GEMINI_API_KEY:
+        try:
+            gemini_model = model if model and "gemini" in model.lower() else "gemini-1.5-flash"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={GEMINI_API_KEY}"
+            prompt_text = f"{system}\n\nUser Request:\n{user}"
+            payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
+            
+            res = await asyncio.to_thread(requests.post, url, json=payload, timeout=60)
+            res.raise_for_status()
+            data = res.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            chunk_size = 25
+            for i in range(0, len(text), chunk_size):
+                yield text[i:i+chunk_size]
+                await asyncio.sleep(0.02)
+            return
+        except Exception as err:
+            print(f"Gemini API stream error: {err}. Falling back...")
 
     active_model = model or DEFAULT_MODEL
     payload = {
@@ -77,7 +101,6 @@ async def call_llm_stream(system: str, user: str, model: str = None):
 
     threading.Thread(target=run_in_thread, daemon=True).start()
 
-    # Fallback response content in case Ollama stream yields nothing
     yielded_any = False
     while True:
         chunk = await asyncio.to_thread(q.get)
@@ -96,9 +119,25 @@ async def call_llm_stream(system: str, user: str, model: str = None):
 
 
 def call_llm(system: str, user: str, max_tokens: int = 1024, json_format: bool = False, model: str = None) -> str:
-    """Send one message to local Ollama and return the text response."""
+    """Send message to Gemini or local Ollama and return text response."""
     if DEMO_MODE:
         return _demo_response(system, user)
+
+    if GEMINI_API_KEY:
+        try:
+            gemini_model = model if model and "gemini" in model.lower() else "gemini-1.5-flash"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={GEMINI_API_KEY}"
+            prompt_text = f"{system}\n\nUser Request:\n{user}"
+            payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
+            if json_format:
+                payload["generationConfig"] = {"responseMimeType": "application/json"}
+
+            res = requests.post(url, json=payload, timeout=60)
+            res.raise_for_status()
+            data = res.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as e:
+            print(f"Gemini API call failed ({e}). Falling back to Ollama / Demo...")
 
     active_model = model or DEFAULT_MODEL
 
@@ -126,6 +165,7 @@ def call_llm(system: str, user: str, max_tokens: int = 1024, json_format: bool =
     except Exception as e:
         print(f"Ollama call failed for model {active_model} ({e}). Falling back to demo response.")
         return _demo_response(system, user)
+
 
 
 # ---------------------------------------------------------------------------

@@ -10,8 +10,13 @@ __pycache__/
 mlruns/
 mlflow.db
 
-# IDE & OS junk
+# Local database storage
+data/
+*.db
+*.sqlite
+*.sqlite3
 
+# IDE & OS junk
 .vscode/
 .idea/
 .DS_Store

@@ -19,11 +19,33 @@ const subQuestionsContainer = document.getElementById('sub-questions-container')
 const workersSection = document.getElementById('workers-section');
 const workersGrid = document.getElementById('workers-grid');
 
+// VeritasCore DOM Elements
+const veritasPapersSection = document.getElementById('veritas-papers-section');
+const papersGrid = document.getElementById('papers-grid');
+
 const synthesizerSection = document.getElementById('synthesizer-section');
 const finalReportContent = document.getElementById('final-report-content');
 const copyBtn = document.getElementById('copy-btn');
 const downloadBtn = document.getElementById('download-btn');
 const historyList = document.getElementById('history-list');
+const clearHistoryBtn = document.getElementById('clear-history-btn');
+
+const veritasDnaSection = document.getElementById('veritas-dna-section');
+const dnaContainer = document.getElementById('dna-container');
+
+const veritasAuditSection = document.getElementById('veritas-audit-section');
+const auditClaimsContainer = document.getElementById('audit-claims-container');
+const auditIntegrityScore = document.getElementById('audit-integrity-score');
+const auditSupportedCount = document.getElementById('audit-supported-count');
+const auditUnsupportedCount = document.getElementById('audit-unsupported-count');
+const auditContradictoryCount = document.getElementById('audit-contradictory-count');
+const auditNeedsResearchCount = document.getElementById('audit-needs-research-count');
+
+const countAllEl = document.getElementById('count-all');
+const countSupportedEl = document.getElementById('count-supported');
+const countUnsupportedEl = document.getElementById('count-unsupported');
+const countContradictoryEl = document.getElementById('count-contradictory');
+const countNeedsResearchEl = document.getElementById('count-needs-research');
 
 // State Variables
 let timerInterval = null;
@@ -31,12 +53,20 @@ let startTime = 0;
 let eventSource = null;
 let activeSubQuestions = [];
 let sessionHistory = [];
-let activeReportText = ""; // Keep raw Markdown for copying/downloading
+let activeReportText = "";
+let currentAuditClaims = [];
+let currentFilter = "all";
+let activeCapabilityTab = 'report';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     fetchConfig();
     fetchModels();
+    fetchHistory();
+    
+    if (clearHistoryBtn) {
+        clearHistoryBtn.addEventListener('click', handleClearAllHistory);
+    }
     
     runBtn.addEventListener('click', startResearchPipeline);
     copyBtn.addEventListener('click', copyReportToClipboard);
@@ -48,7 +78,100 @@ document.addEventListener('DOMContentLoaded', () => {
             startResearchPipeline();
         }
     });
+
+    // Setup Audit Filter Buttons and Navigation Tabs
+    setupAuditFilters();
+    setupCapabilityTabs();
 });
+
+// ---------------------------------------------------------------------------
+// Multi-Navbar Capabilities Navigation
+// ---------------------------------------------------------------------------
+
+function setupCapabilityTabs() {
+    const topTabBtns = document.querySelectorAll('.nav-tab-btn');
+    const sideCapBtns = document.querySelectorAll('.sidebar-cap-btn');
+
+    topTabBtns.forEach(btn => {
+        btn.onclick = () => {
+            const tabId = btn.getAttribute('data-tab');
+            switchCapabilityTab(tabId);
+        };
+    });
+
+    sideCapBtns.forEach(btn => {
+        btn.onclick = () => {
+            const tabId = btn.getAttribute('data-tab');
+            dashboardResults.classList.remove('hidden');
+            switchCapabilityTab(tabId);
+        };
+    });
+}
+
+function switchCapabilityTab(tabId) {
+    if (!tabId) return;
+    activeCapabilityTab = tabId;
+
+    // 1. Sync Top Navbar
+    document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+        if (btn.getAttribute('data-tab') === tabId) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // 2. Sync Sidebar Capabilities
+    document.querySelectorAll('.sidebar-cap-btn').forEach(btn => {
+        if (btn.getAttribute('data-tab') === tabId) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // 3. Toggle View Panels
+    document.querySelectorAll('.capability-view').forEach(view => {
+        view.classList.remove('active');
+    });
+
+    const activeView = document.getElementById(`view-${tabId}`);
+    if (activeView) {
+        activeView.classList.add('active');
+    }
+}
+
+function updateBadge(tabId, value) {
+    const pill = document.getElementById(`pill-${tabId}`);
+    const sidePill = document.getElementById(`side-pill-${tabId}`);
+    if (pill) pill.textContent = value;
+    if (sidePill) sidePill.textContent = value;
+}
+
+// Setup filter tabs for VeritasCore Claim Verification
+function setupAuditFilters() {
+    const filterBtns = document.querySelectorAll('.audit-filter-btn');
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.getAttribute('data-filter');
+            applyClaimFilter();
+        });
+    });
+}
+
+function applyClaimFilter() {
+    const claimCards = document.querySelectorAll('.claim-audit-card');
+    claimCards.forEach(card => {
+        const verdict = card.getAttribute('data-verdict');
+        if (currentFilter === 'all' || verdict === currentFilter) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
 
 // Fetch system configurations and set statuses
 async function fetchConfig() {
@@ -67,11 +190,11 @@ async function fetchConfig() {
         }
 
         if (config.tavily_key_configured) {
-            tavilyStatus.textContent = "Live Search";
+            tavilyStatus.textContent = "Tavily + ArXiv";
             tavilyStatus.className = "status-badge live";
         } else {
-            tavilyStatus.textContent = "Canned Search";
-            tavilyStatus.className = "status-badge demo";
+            tavilyStatus.textContent = "DDG + ArXiv";
+            tavilyStatus.className = "status-badge live";
         }
 
         if (config.llm_demo_mode) {
@@ -83,9 +206,9 @@ async function fetchConfig() {
         }
     } catch (error) {
         console.error("Error fetching config:", error);
-        ollamaStatus.textContent = "Error";
+        ollamaStatus.textContent = "Offline";
         ollamaStatus.className = "status-badge offline";
-        tavilyStatus.textContent = "Error";
+        tavilyStatus.textContent = "Offline";
         tavilyStatus.className = "status-badge offline";
         modeStatus.textContent = "Offline";
         modeStatus.className = "status-badge offline";
@@ -106,18 +229,16 @@ async function fetchModels() {
                 const option = document.createElement('option');
                 option.value = model;
                 option.textContent = model;
-                // Preselect llama3 if it is present, otherwise preselect first model
                 if (model.startsWith('llama3')) {
                     option.selected = true;
                 }
                 modelSelect.appendChild(option);
             });
-            // Re-fetch config to check statuses again
             fetchConfig();
         } else {
             const option = document.createElement('option');
             option.value = "";
-            option.textContent = "No models found (Using Demo)";
+            option.textContent = "Demo / Default Model";
             modelSelect.appendChild(option);
         }
     } catch (error) {
@@ -161,13 +282,11 @@ function logMessage(text, type = 'info') {
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
     
-    // Get timestamp
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
     
     entry.innerHTML = `<span style="color: var(--text-muted)">[${timeStr}]</span> ${text}`;
     
-    // Remove 'active' state from previous logs
     Array.from(statusLogs.children).forEach(el => el.classList.remove('active'));
     
     entry.classList.add('active');
@@ -187,31 +306,44 @@ function startResearchPipeline() {
     
     // 1. Reset UI States
     runBtn.disabled = true;
-    runBtn.querySelector('span').textContent = "Researching...";
+    runBtn.querySelector('span').textContent = "Investigating...";
     runBtn.style.opacity = "0.7";
     
     dashboardResults.classList.remove('hidden');
     
-    // Status indicators
     statusPulse.className = "pulse-indicator blue";
-    pipelineStatusText.textContent = "Initializing...";
+    pipelineStatusText.textContent = "Initializing Pipeline...";
     pipelineProgress.style.width = "5%";
     
     statusLogs.innerHTML = "";
-    logMessage("Initiating multi-agent research network pipeline...", 'info');
+    logMessage("Initiating VeritasCore multi-agent research network...", 'info');
     
-    orchestratorSection.classList.add('hidden');
-    subQuestionsContainer.innerHTML = "";
-    
-    workersSection.classList.add('hidden');
-    workersGrid.innerHTML = "";
-    
-    synthesizerSection.classList.add('hidden');
-    finalReportContent.innerHTML = "";
+    // Initialize view contents with animated placeholders (NEVER leave blank!)
+    subQuestionsContainer.innerHTML = '<div class="loading-state"><div class="mini-spinner"></div><span>Orchestrator decomposing query into sub-questions...</span></div>';
+    workersGrid.innerHTML = '<div class="loading-state"><div class="mini-spinner"></div><span>Worker agents standing by for decomposed tasks...</span></div>';
+    papersGrid.innerHTML = '<div class="loading-state"><div class="mini-spinner"></div><span>Querying ArXiv and academic repositories for scholarly research papers...</span></div>';
+    finalReportContent.innerHTML = '<div class="loading-state"><div class="mini-spinner"></div><span>Report synthesis will begin once parallel research concludes...</span></div>';
     activeReportText = "";
-    
+    dnaContainer.innerHTML = '<div class="loading-state"><div class="mini-spinner"></div><span>Evidence DNA will trace claims to source passages after report drafting...</span></div>';
+    auditClaimsContainer.innerHTML = '<div class="loading-state"><div class="mini-spinner"></div><span>Claim-level verification audit will evaluate evidence grounding upon completion...</span></div>';
+
+    auditIntegrityScore.textContent = "100%";
+    auditSupportedCount.textContent = "0";
+    auditUnsupportedCount.textContent = "0";
+    auditContradictoryCount.textContent = "0";
+    auditNeedsResearchCount.textContent = "0";
+
     startTimer();
     activeSubQuestions = [];
+    currentAuditClaims = [];
+
+    // Reset capability badges and start on pipeline trace view
+    updateBadge('report', 'Waiting');
+    updateBadge('papers', '0');
+    updateBadge('dna', '0');
+    updateBadge('audit', '--');
+    updateBadge('pipeline', 'Starting');
+    switchCapabilityTab('pipeline');
 
     // 2. Open Server-Sent Events (SSE) Stream
     const encodedQuery = encodeURIComponent(query);
@@ -233,14 +365,10 @@ function startResearchPipeline() {
 
     eventSource.onerror = function(err) {
         console.error("SSE stream error:", err);
-        logMessage("SSE Stream connection encountered an unexpected interruption or finished.", 'warning');
-        
-        // Check if finished or actual error
         if (pipelineStatusText.textContent !== "Research Completed" && pipelineStatusText.textContent !== "Failed") {
-            logMessage("Pipeline connection closed abruptly. Terminating runner.", 'error');
+            logMessage("Pipeline connection interrupted.", 'error');
             terminatePipelineRun("Failed", "Connection closed prematurely", "red");
         }
-        
         eventSource.close();
     };
 }
@@ -248,10 +376,25 @@ function startResearchPipeline() {
 // Event Router for SSE
 function handlePipelineEvent(event) {
     switch (event.status) {
-        case "decomposing":
-            pipelineStatusText.textContent = "Orchestrating Task";
+        case "guardrail_checking":
+            pipelineStatusText.textContent = "Guardrail Security Check";
             statusPulse.className = "pulse-indicator blue";
-            pipelineProgress.style.width = "15%";
+            pipelineProgress.style.width = "10%";
+            logMessage(event.message, 'active');
+            break;
+
+        case "guardrail_result":
+            if (event.safe) {
+                logMessage(`Security Guardrail: Clean (${event.message})`, 'success');
+            } else {
+                logMessage(`Security Guardrail Alert: ${event.message}`, 'error');
+            }
+            break;
+
+        case "decomposing":
+            pipelineStatusText.textContent = "Orchestrating Sub-questions";
+            statusPulse.className = "pulse-indicator blue";
+            pipelineProgress.style.width = "20%";
             logMessage(event.message, 'active');
             break;
             
@@ -259,10 +402,10 @@ function handlePipelineEvent(event) {
             activeSubQuestions = event.sub_questions;
             pipelineStatusText.textContent = "Task Decomposed";
             pipelineProgress.style.width = "30%";
-            logMessage(`Orchestrator successfully decomposed query into ${activeSubQuestions.length} sub-tasks.`, 'success');
+            logMessage(`Orchestrator successfully decomposed query into ${activeSubQuestions.length} sub-questions.`, 'success');
+            updateBadge('pipeline', `${activeSubQuestions.length} Tasks`);
             
-            // Show Orchestrator Card
-            orchestratorSection.classList.remove('hidden');
+            subQuestionsContainer.innerHTML = "";
             activeSubQuestions.forEach((q, index) => {
                 const chip = document.createElement('div');
                 chip.className = "question-chip";
@@ -275,13 +418,12 @@ function handlePipelineEvent(event) {
             break;
             
         case "workers_started":
-            pipelineStatusText.textContent = "Concurrent Researching";
+            pipelineStatusText.textContent = "Concurrent Web & ArXiv Research";
             statusPulse.className = "pulse-indicator amber";
-            pipelineProgress.style.width = "45%";
-            logMessage(`Initializing ${event.count} specialized Worker Agents. Booting search interfaces...`, 'active');
+            pipelineProgress.style.width = "40%";
+            logMessage(`Initializing ${event.count} specialized Worker Agents querying search & scholarly repositories...`, 'active');
             
-            // Show Workers Card & Initialize grids with 'Searching' placeholders
-            workersSection.classList.remove('hidden');
+            workersGrid.innerHTML = "";
             activeSubQuestions.forEach((q, index) => {
                 const card = document.createElement('div');
                 card.className = "worker-card searching";
@@ -311,23 +453,34 @@ function handlePipelineEvent(event) {
             logMessage(`Worker Agent ${event.index + 1} failed: ${event.message}`, 'error');
             updateWorkerCard(event.index, 'failed', `Error: ${event.message}`, []);
             break;
+
+        // Capability 1: VeritasCore Paper Intelligence
+        case "veritas_paper_summarizing":
+            pipelineStatusText.textContent = "Extracting Paper Intelligence";
+            statusPulse.className = "pulse-indicator purple";
+            pipelineProgress.style.width = "55%";
+            logMessage(event.message, 'active');
+            break;
+
+        case "veritas_paper_summaries":
+            pipelineProgress.style.width = "65%";
+            logMessage(`VeritasCore extracted structured intelligence from ${event.summaries.length} research papers.`, 'success');
+            updateBadge('papers', String(event.summaries.length));
+            renderPaperSummaries(event.summaries);
+            break;
             
         case "synthesizing":
-            pipelineStatusText.textContent = "Synthesizing Report";
+            pipelineStatusText.textContent = "Synthesizing Cited Report";
             statusPulse.className = "pulse-indicator blue";
             pipelineProgress.style.width = "75%";
+            updateBadge('report', 'Drafting...');
+            switchCapabilityTab('report');
             logMessage(event.message, 'active');
             break;
 
         case "synthesizing_chunk":
-            pipelineStatusText.textContent = "Synthesizing Report";
-            statusPulse.className = "pulse-indicator blue";
-            pipelineProgress.style.width = "80%";
-            if (synthesizerSection.classList.contains('hidden')) {
-                synthesizerSection.classList.remove('hidden');
-                setTimeout(() => {
-                    synthesizerSection.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                }, 100);
+            if (activeReportText === "") {
+                finalReportContent.innerHTML = "";
             }
             activeReportText += event.chunk;
             finalReportContent.innerHTML = marked.parse(activeReportText);
@@ -335,14 +488,44 @@ function handlePipelineEvent(event) {
 
         case "synthesizing_reset":
             activeReportText = "";
-            finalReportContent.innerHTML = "";
-            logMessage("Draft reset. Redrafting report...", 'info');
+            finalReportContent.innerHTML = '<div class="loading-state"><div class="mini-spinner"></div><span>Draft reset. Revising report based on critique...</span></div>';
+            logMessage("Draft reset for evidence re-alignment...", 'info');
+            break;
+
+        // Capability 2: Evidence DNA
+        case "veritas_linking_dna":
+            pipelineStatusText.textContent = "Tracing Evidence DNA";
+            statusPulse.className = "pulse-indicator blue";
+            pipelineProgress.style.width = "82%";
+            logMessage(event.message, 'active');
+            break;
+
+        case "veritas_evidence_dna":
+            pipelineProgress.style.width = "88%";
+            logMessage(`VeritasCore mapped ${event.dna.length} claims to verbatim passages in the research papers.`, 'success');
+            updateBadge('dna', String(event.dna.length));
+            renderEvidenceDNA(event.dna);
+            break;
+
+        // Capability 3: Claim-Level Verification
+        case "veritas_verifying_claims":
+            pipelineStatusText.textContent = "Verifying Claims & Evidence Grounding";
+            statusPulse.className = "pulse-indicator purple";
+            pipelineProgress.style.width = "92%";
+            logMessage(event.message, 'active');
+            break;
+
+        case "veritas_verification":
+            pipelineProgress.style.width = "96%";
+            logMessage(`VeritasCore claim audit finished. Evidence Integrity Score: ${event.audit.integrity_score}%.`, 'success');
+            updateBadge('audit', `${event.audit.integrity_score}%`);
+            renderClaimAudit(event.audit);
             break;
 
         case "critic_reviewing":
-            pipelineStatusText.textContent = "Critic Reviewing";
+            pipelineStatusText.textContent = "Critic Reviewing Against Audit";
             statusPulse.className = "pulse-indicator purple";
-            pipelineProgress.style.width = "90%";
+            pipelineProgress.style.width = "98%";
             logMessage(event.message, 'active');
             break;
 
@@ -353,33 +536,226 @@ function handlePipelineEvent(event) {
                 logMessage(`Critic Review Verdict: <strong>APPROVED</strong>. Feedback: <em>${escapeHtml(event.feedback)}</em>`, 'success');
             }
             break;
-
             
         case "completed":
-            logMessage("Synthesizer successfully merged all worker results and drafted final report.", 'success');
+            logMessage("Research Pipeline & VeritasCore Evidence Verification fully completed.", 'success');
             activeReportText = event.final_report;
-            
-            // Render Markdown
             finalReportContent.innerHTML = marked.parse(activeReportText);
-            synthesizerSection.classList.remove('hidden');
+
+            if (event.veritas) {
+                if (event.veritas.paper_summaries && event.veritas.paper_summaries.length > 0) {
+                    updateBadge('papers', String(event.veritas.paper_summaries.length));
+                    renderPaperSummaries(event.veritas.paper_summaries);
+                }
+                if (event.veritas.evidence_dna && event.veritas.evidence_dna.length > 0) {
+                    updateBadge('dna', String(event.veritas.evidence_dna.length));
+                    renderEvidenceDNA(event.veritas.evidence_dna);
+                }
+                if (event.veritas.audit_report) {
+                    if (event.veritas.audit_report.integrity_score !== undefined) {
+                        updateBadge('audit', `${event.veritas.audit_report.integrity_score}%`);
+                    }
+                    renderClaimAudit(event.veritas.audit_report);
+                }
+            }
             
-            // Scroll to synthesizer report slowly
-            setTimeout(() => {
-                synthesizerSection.scrollIntoView({ behavior: 'smooth' });
-            }, 300);
-            
-            // Terminate run
-            terminatePipelineRun("Research Completed", "Network process completed successfully.", "green");
-            
-            // Save to Session History
-            addToHistory(queryInput.value, activeReportText, event.worker_results);
+            const dbMsg = event.session_id ? ` (Saved to Database as Session #${event.session_id})` : "";
+            updateBadge('report', 'Complete');
+            terminatePipelineRun("Research Completed", `VeritasCore intelligence and audit verified.${dbMsg}`, "green");
+            fetchHistory();
             break;
             
         case "error":
-            logMessage(`Pipeline Process Error: ${event.message}`, 'error');
+            logMessage(`Pipeline Error: ${event.message}`, 'error');
             terminatePipelineRun("Failed", `Error: ${event.message}`, "red");
             break;
     }
+}
+
+// ---------------------------------------------------------------------------
+// VeritasCore Renderers
+// ---------------------------------------------------------------------------
+
+// 1. Render Research Paper Summaries
+function renderPaperSummaries(summaries) {
+    if (!summaries || summaries.length === 0) {
+        papersGrid.innerHTML = '<div class="loading-state"><span>No research papers summarized for this query.</span></div>';
+        return;
+    }
+    papersGrid.innerHTML = "";
+
+    summaries.forEach((paper, idx) => {
+        const card = document.createElement('div');
+        card.className = "paper-card";
+        
+        const findingsList = (paper.key_findings || []).map(f => `<li>${escapeHtml(f)}</li>`).join('');
+
+        card.innerHTML = `
+            <div class="paper-header">
+                <div class="paper-title-line">
+                    <span class="paper-badge">Paper ${idx + 1}</span>
+                    <a href="${escapeHtml(paper.url)}" target="_blank" class="paper-title-link">
+                        ${escapeHtml(paper.title)}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ext-icon"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+                    </a>
+                </div>
+                <div class="paper-meta">
+                    <span><strong>Authors/Venue:</strong> ${escapeHtml(paper.authors || 'Research Lab')}</span> • 
+                    <span><strong>Year:</strong> ${escapeHtml(paper.year || '2024')}</span>
+                </div>
+            </div>
+            <div class="paper-body">
+                <div class="paper-block">
+                    <span class="paper-block-title">🎯 Core Objective & Hypothesis</span>
+                    <p>${escapeHtml(paper.objective)}</p>
+                </div>
+                <div class="paper-block">
+                    <span class="paper-block-title">🔬 Methodology & Architecture</span>
+                    <p>${escapeHtml(paper.methodology)}</p>
+                </div>
+                <div class="paper-block">
+                    <span class="paper-block-title">📊 Key Quantitative Findings</span>
+                    <ul class="paper-findings-list">${findingsList}</ul>
+                </div>
+                ${paper.limitations ? `
+                <div class="paper-block limitations">
+                    <span class="paper-block-title">⚠️ Identified Constraints & Limitations</span>
+                    <p>${escapeHtml(paper.limitations)}</p>
+                </div>` : ''}
+            </div>
+        `;
+        papersGrid.appendChild(card);
+    });
+}
+
+// 2. Render Evidence DNA
+function renderEvidenceDNA(dnaItems) {
+    if (!dnaItems || dnaItems.length === 0) {
+        dnaContainer.innerHTML = '<div class="loading-state"><span>No Evidence DNA links generated for this query.</span></div>';
+        return;
+    }
+    dnaContainer.innerHTML = "";
+
+    dnaItems.forEach((dna, idx) => {
+        const card = document.createElement('div');
+        card.className = "dna-card";
+
+        const alignClass = dna.grounding_alignment === "Direct Corroboration" ? "direct" : 
+                          (dna.grounding_alignment === "Contextual Inference" ? "contextual" : "partial");
+        const confPercent = Math.round((dna.confidence_score || 0.9) * 100);
+
+        card.innerHTML = `
+            <div class="dna-header">
+                <div class="dna-tag-row">
+                    <span class="dna-badge">Claim DNA #${idx + 1}</span>
+                    <span class="alignment-pill ${alignClass}">${escapeHtml(dna.grounding_alignment || 'Direct Corroboration')}</span>
+                </div>
+                <div class="confidence-indicator" title="Grounding Confidence Score">
+                    <span class="conf-label">Confidence:</span>
+                    <div class="conf-bar-bg">
+                        <div class="conf-bar-fill" style="width: ${confPercent}%"></div>
+                    </div>
+                    <span class="conf-text">${confPercent}%</span>
+                </div>
+            </div>
+
+            <div class="dna-claim-text">
+                <span class="quote-symbol">“</span>${escapeHtml(dna.claim_text)}<span class="quote-symbol">”</span>
+            </div>
+
+            <div class="dna-evidence-box">
+                <div class="dna-source-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="source-icon"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z"/></svg>
+                    <span>Supporting Paper:</span>
+                    <a href="${escapeHtml(dna.source_url)}" target="_blank">${escapeHtml(dna.source_title)}</a>
+                </div>
+                <div class="verbatim-passage">
+                    <span class="passage-lbl">Verbatim Grounding Passage:</span>
+                    <blockquote>"${escapeHtml(dna.verbatim_passage)}"</blockquote>
+                </div>
+            </div>
+        `;
+        dnaContainer.appendChild(card);
+    });
+}
+
+// 3. Render Claim-Level Verification Audit
+function renderClaimAudit(audit) {
+    if (!audit || !audit.claims || audit.claims.length === 0) {
+        auditClaimsContainer.innerHTML = '<div class="loading-state"><span>No claim verification audit items available.</span></div>';
+        return;
+    }
+    auditClaimsContainer.innerHTML = "";
+
+    // Set metrics
+    auditIntegrityScore.textContent = `${audit.integrity_score || 100}%`;
+    auditSupportedCount.textContent = audit.supported_claims || 0;
+    auditUnsupportedCount.textContent = audit.unsupported_claims || 0;
+    auditContradictoryCount.textContent = audit.contradictory_claims || 0;
+    auditNeedsResearchCount.textContent = audit.needs_research_claims || 0;
+
+    countAllEl.textContent = audit.total_claims || audit.claims.length;
+    countSupportedEl.textContent = audit.supported_claims || 0;
+    countUnsupportedEl.textContent = audit.unsupported_claims || 0;
+    countContradictoryEl.textContent = audit.contradictory_claims || 0;
+    countNeedsResearchEl.textContent = audit.needs_research_claims || 0;
+
+    currentAuditClaims = audit.claims;
+
+    audit.claims.forEach((item, idx) => {
+        const card = document.createElement('div');
+        const verdict = (item.verdict || "SUPPORTED").toUpperCase();
+        card.className = `claim-audit-card ${verdict.toLowerCase().replace(/_/g, '-')}`;
+        card.setAttribute('data-verdict', verdict);
+
+        let verdictBadge = "";
+        if (verdict === "SUPPORTED") {
+            verdictBadge = '<span class="audit-verdict-badge supported">✅ SUPPORTED</span>';
+        } else if (verdict === "UNSUPPORTED") {
+            verdictBadge = '<span class="audit-verdict-badge unsupported">❌ UNSUPPORTED LEAP</span>';
+        } else if (verdict === "CONTRADICTORY") {
+            verdictBadge = '<span class="audit-verdict-badge contradictory">⚠️ CONTRADICTORY FINDINGS</span>';
+        } else {
+            verdictBadge = '<span class="audit-verdict-badge needs-research">🔍 NEEDS FURTHER RESEARCH</span>';
+        }
+
+        const sourcesList = (item.supporting_sources && item.supporting_sources.length > 0)
+            ? item.supporting_sources.map(s => `<span class="claim-source-chip">${escapeHtml(s)}</span>`).join(' ')
+            : '<span class="no-source">No supporting citations found</span>';
+
+        card.innerHTML = `
+            <div class="audit-card-header">
+                <span class="claim-id-pill">Claim #${idx + 1}</span>
+                ${verdictBadge}
+            </div>
+
+            <div class="audit-claim-content">
+                <p class="audit-claim-text">${escapeHtml(item.claim_text)}</p>
+                <p class="audit-verdict-expl"><strong>Verification Assessment:</strong> ${escapeHtml(item.verdict_explanation)}</p>
+            </div>
+
+            ${item.conflicting_evidence ? `
+            <div class="audit-conflict-box">
+                <span class="box-title">⚡ Contradictory Evidence in Literature:</span>
+                <p>${escapeHtml(item.conflicting_evidence)}</p>
+            </div>` : ''}
+
+            ${item.open_questions ? `
+            <div class="audit-research-box">
+                <span class="box-title">🔬 Open Research Questions:</span>
+                <p>${escapeHtml(item.open_questions)}</p>
+            </div>` : ''}
+
+            <div class="audit-supporting-row">
+                <span class="row-label">Corroborating Sources:</span>
+                <div class="sources-wrap">${sourcesList}</div>
+            </div>
+        `;
+
+        auditClaimsContainer.appendChild(card);
+    });
+
+    applyClaimFilter();
 }
 
 // Update individual worker cards during research
@@ -409,7 +785,8 @@ function updateWorkerCard(index, status, summary, sources) {
             link.href = src.url;
             link.target = "_blank";
             link.textContent = src.title || src.url;
-            link.title = `${src.title}\n(${src.url})`;
+            link.title = `${src.title}
+(${src.url})`;
             sourcesList.appendChild(link);
         });
     }
@@ -423,7 +800,7 @@ function terminatePipelineRun(statusText, logText, pulseColor) {
     pipelineProgress.style.width = "100%";
     
     logMessage(logText, pulseColor === "green" ? 'success' : 'error');
-    logMessage("Pipeline execution finalized. Agent thread closed.", 'info');
+    logMessage("Pipeline execution finalized. VeritasCore inspection complete.", 'info');
     
     runBtn.disabled = false;
     runBtn.querySelector('span').textContent = "Execute Pipeline";
@@ -434,88 +811,185 @@ function terminatePipelineRun(statusText, logText, pulseColor) {
     }
 }
 
-// Session History Management
-function addToHistory(query, report, workers) {
-    const historyItem = {
-        query: query,
-        report: report,
-        workers: workers,
-        time: elapsedTimer.textContent,
-        date: new Date().toLocaleTimeString()
-    };
-    
-    sessionHistory.push(historyItem);
-    renderHistory();
+// ---------------------------------------------------------------------------
+// Persistent SQLite History Management
+// ---------------------------------------------------------------------------
+
+async function fetchHistory() {
+    try {
+        const res = await fetch('/api/history?limit=50');
+        if (!res.ok) throw new Error("Database request failed");
+        const data = await res.json();
+        sessionHistory = data.history || [];
+        renderHistory();
+    } catch (err) {
+        console.error("Error fetching history from SQLite:", err);
+        historyList.innerHTML = '<p class="empty-history">Could not connect to history database.</p>';
+    }
 }
 
 function renderHistory() {
-    if (sessionHistory.length === 0) {
-        historyList.innerHTML = '<p class="empty-history">No previous runs in this session.</p>';
+    if (!sessionHistory || sessionHistory.length === 0) {
+        historyList.innerHTML = '<p class="empty-history">No saved research sessions yet.</p>';
         return;
     }
-    
+
     historyList.innerHTML = "";
-    sessionHistory.forEach((item, index) => {
+    sessionHistory.forEach(item => {
         const div = document.createElement('div');
         div.className = "history-item";
-        div.textContent = `${item.date} - ${item.query}`;
-        div.addEventListener('click', () => loadHistoryItem(index));
+        div.setAttribute('data-id', item.id);
+
+        let dateDisplay = item.created_at || "Recent";
+        try {
+            const d = new Date(item.created_at);
+            if (!isNaN(d.getTime())) {
+                dateDisplay = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+            }
+        } catch (_) {}
+
+        div.innerHTML = `
+            <div class="history-item-top">
+                <span class="history-time">${escapeHtml(dateDisplay)}</span>
+                <div class="history-badges">
+                    <span class="history-duration">${escapeHtml(item.duration || "00:00")}</span>
+                    <button class="history-delete-btn" title="Delete session from database" data-id="${item.id}">✕</button>
+                </div>
+            </div>
+            <div class="history-query" title="${escapeHtml(item.query)}">${escapeHtml(item.query)}</div>
+        `;
+
+        div.addEventListener('click', (e) => {
+            if (e.target.classList.contains('history-delete-btn')) {
+                e.stopPropagation();
+                handleDeleteHistory(item.id);
+                return;
+            }
+            document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+            div.classList.add('active');
+            loadHistoryItem(item.id);
+        });
+
         historyList.appendChild(div);
     });
 }
 
-function loadHistoryItem(index) {
-    const item = sessionHistory[index];
-    
-    // Restore states
-    queryInput.value = item.query;
-    activeReportText = item.report;
-    elapsedTimer.textContent = item.time;
-    
-    dashboardResults.classList.remove('hidden');
-    pipelineStatusText.textContent = "Restored from History";
-    statusPulse.className = "pulse-indicator green";
-    pipelineProgress.style.width = "100%";
-    
-    statusLogs.innerHTML = `<div class="log-entry success">Restored report run from session history (Run time: ${item.time})</div>`;
-    
-    // Hide details cards that we didn't store fully, or show reconstructed worker results
-    orchestratorSection.classList.add('hidden');
-    workersSection.classList.remove('hidden');
-    workersGrid.innerHTML = "";
-    
-    item.workers.forEach((w, wIdx) => {
-        const card = document.createElement('div');
-        card.className = "worker-card completed";
-        card.innerHTML = `
-            <div class="worker-header">
-                <span class="worker-name">Worker Agent ${wIdx + 1}</span>
-                <span class="worker-status completed">completed</span>
-            </div>
-            <p class="worker-question">${escapeHtml(w.sub_question)}</p>
-            <div class="worker-summary">${escapeHtml(w.summary)}</div>
-            <div class="worker-sources" id="hist-sources-${wIdx}">
-                <div class="worker-sources-title">Referenced Sources</div>
-                <div class="sources-list" id="hist-sources-list-${wIdx}"></div>
-            </div>
-        `;
-        workersGrid.appendChild(card);
-        
-        const sourcesList = card.querySelector(`#hist-sources-list-${wIdx}`);
-        w.sources.forEach(src => {
-            const link = document.createElement('a');
-            link.className = "source-link";
-            link.href = src.url;
-            link.target = "_blank";
-            link.textContent = src.title || src.url;
-            sourcesList.appendChild(link);
-        });
-    });
+async function loadHistoryItem(sessionId) {
+    try {
+        logMessage(`Loading session #${sessionId} from SQLite database...`, 'info');
+        const res = await fetch(`/api/history/${sessionId}`);
+        if (!res.ok) throw new Error("Failed to load session details");
+        const data = await res.json();
+        const item = data.session;
 
-    // Render report markdown
-    finalReportContent.innerHTML = marked.parse(activeReportText);
-    synthesizerSection.classList.remove('hidden');
-    synthesizerSection.scrollIntoView({ behavior: 'smooth' });
+        queryInput.value = item.query;
+        activeReportText = item.final_report;
+        elapsedTimer.textContent = item.duration || "00:00.0";
+
+        dashboardResults.classList.remove('hidden');
+        pipelineStatusText.textContent = `Restored Session #${sessionId}`;
+        statusPulse.className = "pulse-indicator green";
+        pipelineProgress.style.width = "100%";
+
+        statusLogs.innerHTML = `<div class="log-entry success">Restored session #${sessionId} from SQLite database (Created: ${item.created_at}, Duration: ${item.duration})</div>`;
+
+        // Restore Orchestrator sub-questions
+        if (item.sub_questions && item.sub_questions.length > 0) {
+            subQuestionsContainer.innerHTML = "";
+            item.sub_questions.forEach((q, index) => {
+                const chip = document.createElement('div');
+                chip.className = "question-chip";
+                chip.innerHTML = `
+                    <span class="question-num">${index + 1}</span>
+                    <span class="question-text">${escapeHtml(q)}</span>
+                `;
+                subQuestionsContainer.appendChild(chip);
+            });
+        }
+
+        // Restore Worker cards
+        if (item.worker_results && item.worker_results.length > 0) {
+            workersGrid.innerHTML = "";
+            item.worker_results.forEach((w, wIdx) => {
+                const card = document.createElement('div');
+                card.className = "worker-card completed";
+                card.innerHTML = `
+                    <div class="worker-header">
+                        <span class="worker-name">Worker Agent ${wIdx + 1}</span>
+                        <span class="worker-status completed">completed</span>
+                    </div>
+                    <p class="worker-question">${escapeHtml(w.sub_question)}</p>
+                    <div class="worker-summary">${escapeHtml(w.summary)}</div>
+                    <div class="worker-sources" id="hist-sources-${wIdx}">
+                        <div class="worker-sources-title">Referenced Sources</div>
+                        <div class="sources-list" id="hist-sources-list-${wIdx}"></div>
+                    </div>
+                `;
+                workersGrid.appendChild(card);
+
+                const sourcesList = card.querySelector(`#hist-sources-list-${wIdx}`);
+                if (w.sources) {
+                    w.sources.forEach(src => {
+                        const link = document.createElement('a');
+                        link.className = "source-link";
+                        link.href = src.url;
+                        link.target = "_blank";
+                        link.textContent = src.title || src.url;
+                        sourcesList.appendChild(link);
+                    });
+                }
+            });
+        }
+
+        // Restore VeritasCore Paper Intelligence
+        renderPaperSummaries(item.paper_summaries || []);
+
+        // Restore Final Synthesized Report
+        finalReportContent.innerHTML = marked.parse(activeReportText);
+
+        // Restore VeritasCore Evidence DNA
+        renderEvidenceDNA(item.evidence_dna || []);
+
+        // Restore VeritasCore Claim-Level Verification Audit
+        renderClaimAudit(item.audit_report || {});
+
+        // Update all badges for restored session
+        updateBadge('report', 'Complete');
+        updateBadge('papers', String((item.paper_summaries || []).length));
+        updateBadge('dna', String((item.evidence_dna || []).length));
+        const auditScore = (item.audit_report && item.audit_report.integrity_score !== undefined) ? `${item.audit_report.integrity_score}%` : '100%';
+        updateBadge('audit', auditScore);
+        updateBadge('pipeline', `${(item.sub_questions || []).length} Tasks`);
+        
+        switchCapabilityTab('report');
+    } catch (err) {
+        console.error("Error loading history session:", err);
+        logMessage(`Error loading session #${sessionId}: ${err.message}`, 'error');
+    }
+}
+
+async function handleDeleteHistory(sessionId) {
+    if (!confirm(`Delete research session #${sessionId} from database?`)) return;
+    try {
+        const res = await fetch(`/api/history/${sessionId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error("Failed to delete");
+        fetchHistory();
+        logMessage(`Session #${sessionId} deleted from SQLite database.`, 'info');
+    } catch (err) {
+        alert("Failed to delete session: " + err.message);
+    }
+}
+
+async function handleClearAllHistory() {
+    if (!confirm("Are you sure you want to clear all research history from the SQLite database? This cannot be undone.")) return;
+    try {
+        const res = await fetch('/api/history', { method: 'DELETE' });
+        if (!res.ok) throw new Error("Failed to clear history");
+        fetchHistory();
+        logMessage("All research history cleared from SQLite database.", 'info');
+    } catch (err) {
+        alert("Failed to clear history: " + err.message);
+    }
 }
 
 // Copy to Clipboard
@@ -543,7 +1017,6 @@ function downloadReportMarkdown() {
     const link = document.createElement("a");
     link.setAttribute("href", url);
     
-    // Generate clean filename
     const querySlug = queryInput.value.trim()
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '_')
@@ -565,4 +1038,3 @@ function escapeHtml(unsafe) {
          .replace(/"/g, "&quot;")
          .replace(/'/g, "&#039;");
 }
-
