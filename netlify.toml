@@ -1,0 +1,48 @@
+# Netlify Configuration for Research Paper Agent
+# https://docs.netlify.com/configure-builds/file-based-configuration/
+
+[build]
+  # Directory containing static web assets
+  publish = "static"
+
+[context.production]
+  publish = "static"
+
+[context.branch-deploy]
+  publish = "static"
+
+[context.deploy-preview]
+  publish = "static"
+
+# Optional API Proxy Rewrite:
+# Uncomment when your Python FastAPI backend is deployed on Render/Railway/Fly.io
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://your-backend-api.onrender.com/api/:splat"
+#   status = 200
+#   force = true
+
+# SPA / Static fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security & Cache-Control headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/app.css"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/app.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

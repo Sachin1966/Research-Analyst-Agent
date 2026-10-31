@@ -1,3 +1,14 @@
+
+// Backend API Host configuration (supports Netlify proxy or direct external server)
+function getApiBase() {
+    const saved = localStorage.getItem('veritas_api_base');
+    if (saved) return saved.trim().replace(/\/+$/, '');
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryApi = urlParams.get('api');
+    if (queryApi) return queryApi.trim().replace(/\/+$/, '');
+    return '';
+}
+
 // DOM Elements
 const modelSelect = document.getElementById('model-select');
 const ollamaStatus = document.getElementById('ollama-status');
@@ -60,6 +71,22 @@ let activeCapabilityTab = 'report';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    const apiUrlInput = document.getElementById('api-url-input');
+    if (apiUrlInput) {
+        apiUrlInput.value = localStorage.getItem('veritas_api_base') || '';
+        apiUrlInput.addEventListener('change', () => {
+            const val = apiUrlInput.value.trim();
+            if (val) {
+                localStorage.setItem('veritas_api_base', val);
+            } else {
+                localStorage.removeItem('veritas_api_base');
+            }
+            fetchConfig();
+            fetchModels();
+            fetchHistory();
+        });
+    }
+
     fetchConfig();
     fetchModels();
     fetchHistory();
@@ -176,7 +203,7 @@ function applyClaimFilter() {
 // Fetch system configurations and set statuses
 async function fetchConfig() {
     try {
-        const response = await fetch('/api/config');
+        const response = await fetch(`${getApiBase()}/api/config`);
         if (!response.ok) throw new Error("Config endpoint returned error");
         const config = await response.json();
         
@@ -218,7 +245,7 @@ async function fetchConfig() {
 // Fetch available Ollama models
 async function fetchModels() {
     try {
-        const response = await fetch('/api/models');
+        const response = await fetch(`${getApiBase()}/api/models`);
         if (!response.ok) throw new Error("Models endpoint error");
         const data = await response.json();
         
@@ -348,7 +375,7 @@ function startResearchPipeline() {
     // 2. Open Server-Sent Events (SSE) Stream
     const encodedQuery = encodeURIComponent(query);
     const modelParam = selectedModel ? `&model=${encodeURIComponent(selectedModel)}` : '';
-    const sseUrl = `/api/research/stream?query=${encodedQuery}${modelParam}`;
+    const sseUrl = `${getApiBase()}/api/research/stream?query=${encodedQuery}${modelParam}`;
     
     logMessage(`Establishing connection to SSE stream endpoint...`, 'info');
     eventSource = new EventSource(sseUrl);
@@ -817,7 +844,7 @@ function terminatePipelineRun(statusText, logText, pulseColor) {
 
 async function fetchHistory() {
     try {
-        const res = await fetch('/api/history?limit=50');
+        const res = await fetch(`${getApiBase()}/api/history?limit=50`);
         if (!res.ok) throw new Error("Database request failed");
         const data = await res.json();
         sessionHistory = data.history || [];
@@ -877,7 +904,7 @@ function renderHistory() {
 async function loadHistoryItem(sessionId) {
     try {
         logMessage(`Loading session #${sessionId} from SQLite database...`, 'info');
-        const res = await fetch(`/api/history/${sessionId}`);
+        const res = await fetch(`${getApiBase()}/api/history/${sessionId}`);
         if (!res.ok) throw new Error("Failed to load session details");
         const data = await res.json();
         const item = data.session;
@@ -971,7 +998,7 @@ async function loadHistoryItem(sessionId) {
 async function handleDeleteHistory(sessionId) {
     if (!confirm(`Delete research session #${sessionId} from database?`)) return;
     try {
-        const res = await fetch(`/api/history/${sessionId}`, { method: 'DELETE' });
+        const res = await fetch(`${getApiBase()}/api/history/${sessionId}`, { method: 'DELETE' });
         if (!res.ok) throw new Error("Failed to delete");
         fetchHistory();
         logMessage(`Session #${sessionId} deleted from SQLite database.`, 'info');
@@ -983,7 +1010,7 @@ async function handleDeleteHistory(sessionId) {
 async function handleClearAllHistory() {
     if (!confirm("Are you sure you want to clear all research history from the SQLite database? This cannot be undone.")) return;
     try {
-        const res = await fetch('/api/history', { method: 'DELETE' });
+        const res = await fetch(`${getApiBase()}/api/history`, { method: 'DELETE' });
         if (!res.ok) throw new Error("Failed to clear history");
         fetchHistory();
         logMessage("All research history cleared from SQLite database.", 'info');

@@ -1,6 +1,9 @@
 # Environment variables
 .env
 
+# Netlify local state & cache
+.netlify/
+
 # Python cache & bytecode
 __pycache__/
 *.py[cod]

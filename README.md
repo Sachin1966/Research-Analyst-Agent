@@ -139,6 +139,20 @@ Open `http://localhost:5000` in your browser.
 
 ---
 
+---
+
+## 🌐 Netlify Deployment
+
+The web frontend is pre-configured for continuous deployment on **Netlify**:
+
+1. **Push your repository** to GitHub (`https://github.com/Sachin1966/Research-Analyst-Agent`).
+2. **Log into Netlify** ([app.netlify.com](https://app.netlify.com)) and click **"Add new site" > "Import an existing project"**.
+3. Select your repository: Netlify will automatically detect [`netlify.toml`](netlify.toml) and set:
+   - **Publish directory**: `static`
+   - **Build command**: *(leave blank)*
+4. Click **Deploy Site**.
+5. *(Optional)* If your Python backend is hosted on Render, Railway, or Hugging Face Spaces, enter its URL in the web UI under **Configuration > Backend API URL** or uncomment the API proxy rule in `netlify.toml`.
+
 ## 📁 Repository Structure
 
 ```
@@ -152,7 +166,8 @@ Open `http://localhost:5000` in your browser.
 ├── app.py             # Alternative Streamlit UI
 ├── data/              # SQLite database storage (research_history.db)
 ├── static/            # Frontend assets (index.html, app.js, app.css)
-├── Dockerfile         # Hugging Face Spaces deployment manifest
+├── netlify.toml       # Netlify frontend & CDN routing configuration
+├── Dockerfile         # Hugging Face Spaces / Container deployment manifest
 ├── Procfile           # Render deployment manifest
 ├── requirements.txt   # Python dependencies
 └── README.md          # Documentation
