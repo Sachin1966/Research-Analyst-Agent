@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research Paper Agent — VeritasCore</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Styled CSS -->
+    <link rel="stylesheet" href="app.css?v=3.0">
+    <!-- Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Settings -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    <span>Research Paper Agent</span>
+                </div>
+                <span class="version-tag">v2.5</span>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Configuration</h3>
+                
+                <div class="form-group">
+                    <label for="model-select">Ollama Model</label>
+                    <div class="select-wrapper">
+                        <select id="model-select">
+                            <option value="">Loading models...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 10px;">
+                    <label for="api-url-input">Backend API URL (Optional)</label>
+                    <input type="text" id="api-url-input" placeholder="e.g. https://api.mybackend.com (or blank for local/proxy)" style="width: 100%; padding: 7px 10px; font-size: 0.78rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: inherit;">
+                </div>
+
+                <div class="status-list">
+                    <div class="status-item">
+                        <span>Ollama Connection</span>
+                        <span id="ollama-status" class="status-badge offline">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Web & ArXiv Search</span>
+                        <span id="tavily-status" class="status-badge offline">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Operation Mode</span>
+                        <span id="mode-status" class="status-badge offline">Checking...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Capabilities Navigation in Sidebar -->
+            <div class="sidebar-section">
+                <h3>Capabilities & Views</h3>
+                <div class="sidebar-capabilities-nav">
+                    <button class="sidebar-cap-btn active" data-tab="report">
+                        <div class="cap-btn-header">
+                            <span class="feat-icon">📄</span>
+                            <span class="cap-btn-title">Research Report</span>
+                            <span class="cap-btn-badge" id="side-pill-report">Draft</span>
+                        </div>
+                        <p class="cap-btn-desc">Synthesized report with inline citations</p>
+                    </button>
+
+                    <button class="sidebar-cap-btn" data-tab="papers">
+                        <div class="cap-btn-header">
+                            <span class="feat-icon">📚</span>
+                            <span class="cap-btn-title">Paper Summaries</span>
+                            <span class="cap-btn-badge" id="side-pill-papers">0</span>
+                        </div>
+                        <p class="cap-btn-desc">Objective, methods, findings, constraints</p>
+                    </button>
+
+                    <button class="sidebar-cap-btn" data-tab="dna">
+                        <div class="cap-btn-header">
+                            <span class="feat-icon">🧬</span>
+                            <span class="cap-btn-title">Evidence DNA</span>
+                            <span class="cap-btn-badge" id="side-pill-dna">0</span>
+                        </div>
+                        <p class="cap-btn-desc">Report claims linked to source passages</p>
+                    </button>
+
+                    <button class="sidebar-cap-btn" data-tab="audit">
+                        <div class="cap-btn-header">
+                            <span class="feat-icon">⚖️</span>
+                            <span class="cap-btn-title">Claim Audit</span>
+                            <span class="cap-btn-badge" id="side-pill-audit">0%</span>
+                        </div>
+                        <p class="cap-btn-desc">Unsupported & contradictory checks</p>
+                    </button>
+
+                    <button class="sidebar-cap-btn" data-tab="pipeline">
+                        <div class="cap-btn-header">
+                            <span class="feat-icon">⚡</span>
+                            <span class="cap-btn-title">Agent Pipeline</span>
+                            <span class="cap-btn-badge" id="side-pill-pipeline">Trace</span>
+                        </div>
+                        <p class="cap-btn-desc">Orchestrator & worker parallel research</p>
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar-section fill-height">
+                <div class="sidebar-section-header">
+                    <h3>Research History</h3>
+                    <button id="clear-history-btn" class="btn-text-sm" title="Clear all saved history">Clear All</button>
+                </div>
+                <div id="history-list" class="history-list">
+                    <p class="empty-history">Loading history from database...</p>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <p>Research Paper Intelligence Agent</p>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-workspace">
+            <header class="workspace-header">
+                <div class="header-title">
+                    <h1>Multi-Agent Research Assistant</h1>
+                    <p>Research Paper Intelligence, Autonomous Synthesis & Evidence Verification</p>
+                </div>
+                <div class="header-actions">
+                    <span id="elapsed-timer" class="timer-display">00:00.0</span>
+                </div>
+            </header>
+
+            <section class="search-panel">
+                <div class="search-box-container">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="query-input" placeholder="Ask a complex research question... (e.g. How do multi-agent LLM systems work in production?)" value="How do multi-agent LLM systems work and where are they used in production?">
+                    <button id="run-btn" class="btn-primary">
+                        <span>Execute Pipeline</span>
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Results Display Dashboard (Hidden by default, shown when running/done) -->
+            <div id="dashboard-results" class="dashboard-results hidden">
+                
+                <!-- Live Pipeline Stepper/Logs -->
+                <div class="card glass status-card">
+                    <div class="card-header">
+                        <h2 class="section-title">
+                            <span class="pulse-indicator red" id="status-pulse"></span>
+                            Pipeline Status: <span id="pipeline-status-text">Idle</span>
+                        </h2>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="pipeline-progress" class="progress-bar" style="width: 0%"></div>
+                    </div>
+                    <div id="status-logs" class="status-logs">
+                        <div class="log-entry">Waiting for user input...</div>
+                    </div>
+                </div>
+
+                <!-- Top Capabilities Navbar -->
+                <nav class="capabilities-nav-bar" id="capabilities-nav-bar">
+                    <button class="nav-tab-btn active" data-tab="report">
+                        <span class="tab-emoji">📄</span>
+                        <span class="tab-title">Research Report</span>
+                        <span class="tab-pill" id="pill-report">Live</span>
+                    </button>
+                    <button class="nav-tab-btn" data-tab="papers">
+                        <span class="tab-emoji">📚</span>
+                        <span class="tab-title">Paper Summaries</span>
+                        <span class="tab-pill" id="pill-papers">0</span>
+                    </button>
+                    <button class="nav-tab-btn" data-tab="dna">
+                        <span class="tab-emoji">🧬</span>
+                        <span class="tab-title">Evidence DNA</span>
+                        <span class="tab-pill" id="pill-dna">0</span>
+                    </button>
+                    <button class="nav-tab-btn" data-tab="audit">
+                        <span class="tab-emoji">⚖️</span>
+                        <span class="tab-title">Claim Audit</span>
+                        <span class="tab-pill" id="pill-audit">0%</span>
+                    </button>
+                    <button class="nav-tab-btn" data-tab="pipeline">
+                        <span class="tab-emoji">⚡</span>
+                        <span class="tab-title">Agent Pipeline</span>
+                        <span class="tab-pill" id="pill-pipeline">Trace</span>
+                    </button>
+                </nav>
+
+                <!-- Capability View 1: Final Synthesized Report -->
+                <div class="capability-view active" id="view-report">
+                    <div id="synthesizer-section" class="card glass">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <h2>📄 Final Synthesized Research Report</h2>
+                                <p class="section-desc">Comprehensive synthesized findings with inline [1], [2] citations and bibliography</p>
+                            </div>
+                            <div class="header-controls">
+                                <span class="agent-badge synthesizer">Synthesizer Agent</span>
+                                <button id="copy-btn" class="btn-secondary btn-sm" title="Copy to Clipboard">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-small-icon"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                    Copy
+                                </button>
+                                <button id="download-btn" class="btn-secondary btn-sm" title="Download Markdown">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-small-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>
+                                    Download
+                                </button>
+                            </div>
+                        </div>
+                        <div class="report-content markdown-body" id="final-report-content">
+                            <!-- Rendered Markdown goes here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Capability View 2: VeritasCore Paper Intelligence -->
+                <div class="capability-view" id="view-papers">
+                    <div id="veritas-papers-section" class="card glass">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <h2>📚 Research Paper Intelligence</h2>
+                                <p class="section-desc">Extracted objectives, methodologies, quantitative benchmark findings, and limitations from retrieved papers</p>
+                            </div>
+                            <span class="agent-badge veritas">Paper Intelligence</span>
+                        </div>
+                        <div id="papers-grid" class="papers-grid">
+                            <!-- Filled dynamically by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Capability View 3: VeritasCore Evidence DNA -->
+                <div class="capability-view" id="view-dna">
+                    <div id="veritas-dna-section" class="card glass">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <h2>🧬 Evidence DNA Grounding Matrix</h2>
+                                <p class="section-desc">Trace each factual claim in the report directly to exact verbatim grounding passages from original research papers</p>
+                            </div>
+                            <span class="agent-badge veritas">Evidence DNA</span>
+                        </div>
+                        <div id="dna-container" class="dna-container">
+                            <!-- Filled dynamically by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Capability View 4: VeritasCore Claim-Level Verification Audit -->
+                <div class="capability-view" id="view-audit">
+                    <div id="veritas-audit-section" class="card glass">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <h2>⚖️ Claim-Level Verification Audit</h2>
+                                <p class="section-desc">Audited evidence grounding, hallucination detection, conflicting viewpoints, and open research questions</p>
+                            </div>
+                            <span class="agent-badge veritas">Verification Audit</span>
+                        </div>
+
+                        <!-- Metrics bar -->
+                        <div class="audit-metrics-bar">
+                            <div class="audit-metric-badge integrity">
+                                <span class="metric-val" id="audit-integrity-score">100%</span>
+                                <span class="metric-lbl">Evidence Integrity</span>
+                            </div>
+                            <div class="audit-metric-badge supported">
+                                <span class="metric-val" id="audit-supported-count">0</span>
+                                <span class="metric-lbl">Supported</span>
+                            </div>
+                            <div class="audit-metric-badge unsupported">
+                                <span class="metric-val" id="audit-unsupported-count">0</span>
+                                <span class="metric-lbl">Unsupported</span>
+                            </div>
+                            <div class="audit-metric-badge contradictory">
+                                <span class="metric-val" id="audit-contradictory-count">0</span>
+                                <span class="metric-lbl">Contradictory</span>
+                            </div>
+                            <div class="audit-metric-badge needs-research">
+                                <span class="metric-val" id="audit-needs-research-count">0</span>
+                                <span class="metric-lbl">Needs Research</span>
+                            </div>
+                        </div>
+
+                        <!-- Filter Tabs -->
+                        <div class="audit-filter-tabs">
+                            <button class="audit-filter-btn active" data-filter="all">All Claims (<span id="count-all">0</span>)</button>
+                            <button class="audit-filter-btn" data-filter="SUPPORTED">✅ Supported (<span id="count-supported">0</span>)</button>
+                            <button class="audit-filter-btn" data-filter="UNSUPPORTED">❌ Unsupported (<span id="count-unsupported">0</span>)</button>
+                            <button class="audit-filter-btn" data-filter="CONTRADICTORY">⚠️ Contradictory (<span id="count-contradictory">0</span>)</button>
+                            <button class="audit-filter-btn" data-filter="NEEDS_FURTHER_RESEARCH">🔍 Needs Research (<span id="count-needs-research">0</span>)</button>
+                        </div>
+
+                        <div id="audit-claims-container" class="audit-claims-container">
+                            <!-- Filled dynamically by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Capability View 5: Agent Pipeline Trace (Orchestrator & Workers) -->
+                <div class="capability-view" id="view-pipeline">
+                    <!-- Orchestrator Sub-questions -->
+                    <div id="orchestrator-section" class="card glass">
+                        <div class="card-header">
+                            <h2>1. Orchestrator Decompositions</h2>
+                            <span class="agent-badge orchestrator">Orchestrator Agent</span>
+                        </div>
+                        <p class="section-desc">The orchestrator analyzed the query and split it into the following concurrent sub-questions:</p>
+                        <div id="sub-questions-container" class="sub-questions-grid">
+                            <!-- Filled by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Workers Parallel Execution -->
+                    <div id="workers-section" class="card glass">
+                        <div class="card-header">
+                            <h2>2. Worker Agents (Concurrent Research)</h2>
+                            <span class="agent-badge worker">Worker Agents</span>
+                        </div>
+                        <div id="workers-grid" class="workers-grid">
+                            <!-- Filled dynamically by JS -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Main JavaScript Logic -->
+    <script src="app.js?v=3.0"></script>
+</body>
+</html>
