@@ -1,5 +1,7 @@
 # Research Analyst Agent with VeritasCore 🚀🔬
 
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/Sachin1966/Research-Analyst-Agent)
+
 An autonomous, multi-agent AI research assistant built on an **Orchestrator-Worker-Synthesizer-Critic** architecture with real-time SSE web streaming, automatic fallbacks, built-in **Agentic AI Security Guardrails**, and **VeritasCore: Research Paper Intelligence & Evidence Verification**.
 
 ---
