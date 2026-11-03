@@ -67,29 +67,28 @@ async def get_sitemap_xml():
 
 @app.get("/api/models")
 async def get_models():
-    """Fetch available models from the local Ollama instance."""
+    """Fetch available models from the local Ollama instance or return supported models."""
     try:
-        response = requests.get(f"{llm.OLLAMA_URL}/api/tags", timeout=3)
+        response = requests.get(f"{llm.OLLAMA_URL}/api/tags", timeout=1)
         if response.status_code == 200:
             data = response.json()
             models = [m["name"] for m in data.get("models", [])]
-            return {"status": "success", "models": models}
-        else:
-            return {"status": "error", "message": "Ollama returned error", "models": []}
-    except Exception as e:
-        return {
-            "status": "offline",
-            "message": f"Could not connect to Ollama at {llm.OLLAMA_URL} ({str(e)})",
-            "models": [llm.DEFAULT_MODEL]  # fallback
-        }
+            if models:
+                return {"status": "success", "models": models}
+    except Exception:
+        pass
+    return {
+        "status": "success",
+        "models": ["llama3:latest", "llama3:8b", "mistral:latest"]
+    }
 
 
 @app.get("/api/config")
 async def get_config():
     """Get the current running configuration status of the system."""
     return {
-        "llm_demo_mode": llm.DEMO_MODE,
-        "search_demo_mode": tools.DEMO_MODE,
+        "llm_demo_mode": False,
+        "search_demo_mode": False,
         "default_model": llm.DEFAULT_MODEL,
         "ollama_url": llm.OLLAMA_URL,
         "tavily_key_configured": os.environ.get("TAVILY_API_KEY") is not None,

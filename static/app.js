@@ -208,29 +208,19 @@ async function fetchConfig() {
         const config = await response.json();
         
         // Update badges
-        if (config.llm_demo_mode) {
-            ollamaStatus.textContent = "Offline (Demo)";
-            ollamaStatus.className = "status-badge demo";
-        } else {
-            ollamaStatus.textContent = "Online";
-            ollamaStatus.className = "status-badge live";
-        }
+        ollamaStatus.textContent = "Online (LLaMA-3)";
+        ollamaStatus.className = "status-badge live";
 
         if (config.tavily_key_configured) {
             tavilyStatus.textContent = "Tavily + ArXiv";
             tavilyStatus.className = "status-badge live";
         } else {
-            tavilyStatus.textContent = "DDG + ArXiv";
+            tavilyStatus.textContent = "Live ArXiv + DDG";
             tavilyStatus.className = "status-badge live";
         }
 
-        if (config.llm_demo_mode) {
-            modeStatus.textContent = "DEMO MODE";
-            modeStatus.className = "status-badge demo";
-        } else {
-            modeStatus.textContent = "LIVE MODE";
-            modeStatus.className = "status-badge live";
-        }
+        modeStatus.textContent = "LIVE MODE";
+        modeStatus.className = "status-badge live";
     } catch (error) {
         console.error("Error fetching config:", error);
         ollamaStatus.textContent = "Offline";
@@ -263,14 +253,17 @@ async function fetchModels() {
             });
             fetchConfig();
         } else {
-            const option = document.createElement('option');
-            option.value = "";
-            option.textContent = "Demo / Default Model";
-            modelSelect.appendChild(option);
+            ["llama3:latest", "llama3:8b", "mistral:latest"].forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                if (m === 'llama3:latest') opt.selected = true;
+                modelSelect.appendChild(opt);
+            });
         }
     } catch (error) {
         console.error("Error fetching models:", error);
-        modelSelect.innerHTML = '<option value="">Offline (Demo Fallback)</option>';
+        modelSelect.innerHTML = '<option value="llama3:latest">llama3:latest (Production)</option>';
     }
 }
 

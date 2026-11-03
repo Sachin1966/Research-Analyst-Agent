@@ -19,3 +19,4 @@ services:
         sync: false
       - key: DEMO_MODE
         value: "0"
+
