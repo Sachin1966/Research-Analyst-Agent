@@ -10,7 +10,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 load_dotenv()
 
 from fastapi import FastAPI, Query, HTTPException, Body
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from dataclasses import asdict
@@ -30,6 +30,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/health")
+@app.get("/api/health")
+async def health_check():
+    """Production health check endpoint for cloud monitoring and container orchestrators."""
+    return {
+        "status": "healthy",
+        "service": "Research Paper Agent",
+        "version": "2.5",
+        "engine": "VeritasCore",
+        "timestamp": time.time()
+    }
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def get_robots_txt():
+    """Serve robots.txt for Googlebot and search indexers."""
+    robots_file = os.path.join(os.path.dirname(__file__), "static", "robots.txt")
+    if os.path.exists(robots_file):
+        with open(robots_file, "r", encoding="utf-8") as f:
+            return f.read()
+    return "User-agent: *\nAllow: /\nDisallow: /api/\n"
+
+
+@app.get("/sitemap.xml", response_class=Response)
+async def get_sitemap_xml():
+    """Serve sitemap.xml for search engines with application/xml media type."""
+    sitemap_file = os.path.join(os.path.dirname(__file__), "static", "sitemap.xml")
+    if os.path.exists(sitemap_file):
+        with open(sitemap_file, "r", encoding="utf-8") as f:
+            return Response(content=f.read(), media_type="application/xml")
+    return Response(content="<urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'></urlset>", media_type="application/xml")
 
 
 @app.get("/api/models")

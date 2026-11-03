@@ -1,0 +1,7 @@
+# Robots.txt for Research Paper Agent with VeritasCore
+# Technical SEO compliance for Googlebot, Bingbot, and web crawlers
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://research-analyst-agent.onrender.com/sitemap.xml
