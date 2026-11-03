@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <!-- Styled CSS -->
-    <link rel="stylesheet" href="app.css?v=3.0">
+    <link rel="stylesheet" href="app.css?v=3.1">
     <!-- Markdown Parser -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
@@ -108,6 +108,15 @@
                         </div>
                         <p class="cap-btn-desc">Orchestrator & worker parallel research</p>
                     </button>
+
+                    <button class="sidebar-cap-btn" data-tab="developer">
+                        <div class="cap-btn-header">
+                            <span class="feat-icon">👨‍💻</span>
+                            <span class="cap-btn-title">Developer Info</span>
+                            <span class="cap-btn-badge" id="side-pill-developer">Author</span>
+                        </div>
+                        <p class="cap-btn-desc">Architect profile, tech stack & copyright</p>
+                    </button>
                 </div>
             </div>
 
@@ -121,8 +130,12 @@
                 </div>
             </div>
             
-            <div class="sidebar-footer">
-                <p>Research Paper Intelligence Agent</p>
+            <div class="sidebar-developer-footer">
+                <a href="developer.html" class="sidebar-developer-link" title="View Full Developer Information">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><circle cx="12" cy="12" r="10"></circle><path d="M14.83 14.83a4 4 0 1 1 0-5.66"></path></svg>
+                    <span>Developer: Sachin (@Sachin1966)</span>
+                </a>
+                <span class="sidebar-copyright-text">© 2026 All Rights Reserved</span>
             </div>
         </aside>
 
@@ -199,6 +212,11 @@
                         <span class="tab-emoji">⚡</span>
                         <span class="tab-title">Agent Pipeline</span>
                         <span class="tab-pill" id="pill-pipeline">Trace</span>
+                    </button>
+                    <button class="nav-tab-btn" data-tab="developer">
+                        <span class="tab-emoji">👨‍💻</span>
+                        <span class="tab-title">Developer Info</span>
+                        <span class="tab-pill" id="pill-developer">Profile</span>
                     </button>
                 </nav>
 
@@ -337,10 +355,107 @@
                 </div>
 
             </div>
+        
+                <!-- Capability View 6: Developer Information & Technical Dossier -->
+                <div class="capability-view" id="view-developer">
+                    <!-- Profile Banner -->
+                    <div class="dev-profile-banner">
+                        <div class="dev-avatar-wrapper">
+                            <div class="dev-avatar">S</div>
+                            <div class="dev-verified-badge" title="Verified Creator">✓</div>
+                        </div>
+                        <div class="dev-header-meta">
+                            <div class="dev-name-row">
+                                <span class="dev-name">Sachin A.</span>
+                                <span class="dev-handle-tag">@Sachin1966</span>
+                            </div>
+                            <div class="dev-role-title">Lead AI Systems Architect & Full-Stack Engineer</div>
+                            <p class="dev-bio">
+                                Creator and architect of <strong>Research Paper Agent with VeritasCore</strong>. Specialized in autonomous multi-agent orchestration, verifiable retrieval-augmented generation (RAG), and zero-friction cloud deployment.
+                            </p>
+                            <div class="dev-links-row">
+                                <a href="https://github.com/Sachin1966" target="_blank" rel="noopener noreferrer" class="dev-social-btn primary">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" style="width: 15px; height: 15px;"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                                    GitHub Profile
+                                </a>
+                                <a href="https://github.com/Sachin1966/Research-Analyst-Agent" target="_blank" rel="noopener noreferrer" class="dev-social-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 15px; height: 15px;"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+                                    Source Repository
+                                </a>
+                                <a href="developer.html" target="_blank" class="dev-social-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 15px; height: 15px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                    Open Full Dossier Page ↗
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Architecture Grid -->
+                    <div class="dev-details-grid">
+                        <div class="dev-detail-card">
+                            <span class="dev-card-icon">🔬</span>
+                            <div class="dev-card-title">VeritasCore Engine</div>
+                            <ul class="dev-card-list">
+                                <li>Scholarly ArXiv live search and deep structured paper extraction.</li>
+                                <li>Granular Evidence DNA mapping report claims to empirical passages.</li>
+                                <li>Claim-Level Verification Audit identifying unsupported assertions.</li>
+                            </ul>
+                        </div>
+
+                        <div class="dev-detail-card">
+                            <span class="dev-card-icon">🤖</span>
+                            <div class="dev-card-title">Multi-Agent Pipeline</div>
+                            <ul class="dev-card-list">
+                                <li>Decomposition Orchestrator, Parallel Workers & Synthesizer.</li>
+                                <li>Adversarial Critic agent scoring coherence & hallucination risk.</li>
+                                <li>Real-time Server-Sent Events (SSE) streaming state execution.</li>
+                            </ul>
+                        </div>
+
+                        <div class="dev-detail-card">
+                            <span class="dev-card-icon">💻</span>
+                            <div class="dev-card-title">Engineering Stack</div>
+                            <ul class="dev-card-list">
+                                <li>Python 3.10+, FastAPI ASGI, SQLite persistent history storage.</li>
+                                <li>Multi-LLM integration: local Ollama, Google Gemini API & Demo.</li>
+                                <li>Modern responsive Glassmorphic UI with zero external runtime bloat.</li>
+                            </ul>
+                        </div>
+
+                        <div class="dev-detail-card">
+                            <span class="dev-card-icon">📊</span>
+                            <div class="dev-card-title">Production LLMOps</div>
+                            <ul class="dev-card-list">
+                                <li>Integrated MLflow telemetry logging duration, metrics & artifacts.</li>
+                                <li>Pre-configured for Netlify, Render, Railway, and Docker deployment.</li>
+                                <li>Automatic fallback mechanisms guaranteeing 100% uptime reliability.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Copyright & Intellectual Property Card -->
+                    <div class="dev-copyright-card">
+                        <div class="dev-copyright-badge">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><circle cx="12" cy="12" r="10"></circle><path d="M14.83 14.83a4 4 0 1 1 0-5.66"></path></svg>
+                            Legal Notice & Intellectual Property
+                        </div>
+                        <div class="dev-copyright-heading">Copyright Notice & Rights Reservation</div>
+                        <p class="dev-copyright-text">
+                            All original software architecture, agentic prompt orchestration, VeritasCore claim verification algorithms, and user interface designs are the intellectual property of <strong>Sachin A. (@Sachin1966)</strong>.
+                        </p>
+                        <p class="dev-copyright-text">
+                            This project is provided under the open-source <strong>MIT License</strong> for research, education, and evaluation. Any redistribution or derivative work must retain the original developer attribution and copyright notice.
+                        </p>
+                        <div class="dev-copyright-footer-tag">
+                            © 2024–2026 Sachin (Sachin1966). All Rights Reserved. VeritasCore™ & Research Paper Agent™.
+                        </div>
+                    </div>
+                </div>
+
         </main>
     </div>
 
     <!-- Main JavaScript Logic -->
-    <script src="app.js?v=3.0"></script>
+    <script src="app.js?v=3.1"></script>
 </body>
 </html>
