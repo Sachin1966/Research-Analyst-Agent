@@ -22,6 +22,7 @@ import llm
 import tools
 import database
 import auth
+import payment
 
 app = FastAPI(title="Multi-Agent Research Assistant API with VeritasCore & SQLite History")
 
@@ -39,6 +40,15 @@ class LoginRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     name: Optional[str] = None
     avatar_url: Optional[str] = None
+
+# Pydantic Schemas for Razorpay Payment Gateway
+class CreateOrderRequest(BaseModel):
+    amount_in_rupees: Optional[int] = 499
+
+class VerifyPaymentRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 # Enable CORS for local development
 app.add_middleware(
@@ -203,6 +213,82 @@ async def update_profile(req: ProfileUpdateRequest, user: dict = Depends(auth.ge
         "user": updated_user,
         "trial_status": trial_status
     }
+
+
+# ---------------------------------------------------------------------------
+# Razorpay Payment Gateway & Pro Upgrade Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/payment/config")
+async def get_payment_configuration():
+    """Returns public Razorpay configuration for frontend checkout initialization."""
+    return {
+        "status": "success",
+        "config": payment.get_public_config()
+    }
+
+
+@app.post("/api/payment/create-order")
+async def create_payment_order(
+    req: Optional[CreateOrderRequest] = None,
+    user: dict = Depends(auth.get_current_user)
+):
+    """Creates a Razorpay order for purchasing the Pro subscription."""
+    amount_rupees = req.amount_in_rupees if req and req.amount_in_rupees else payment.PRO_PLAN_PRICE_INR
+    amount_paise = amount_rupees * 100
+    try:
+        order = payment.create_order(
+            user_id=user["id"],
+            user_email=user["email"],
+            amount_paise=amount_paise
+        )
+        return {
+            "status": "success",
+            "order": order,
+            "user": {
+                "id": user["id"],
+                "name": user["name"],
+                "email": user["email"]
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create Razorpay order: {str(e)}")
+
+
+@app.post("/api/payment/verify")
+async def verify_payment_transaction(
+    req: VerifyPaymentRequest,
+    user: dict = Depends(auth.get_current_user)
+):
+    """Verifies Razorpay HMAC signature and upgrades the researcher to Pro Member."""
+    if not req.razorpay_payment_id:
+        raise HTTPException(status_code=400, detail="Missing payment ID.")
+
+    is_valid = payment.verify_signature(
+        order_id=req.razorpay_order_id,
+        payment_id=req.razorpay_payment_id,
+        signature=req.razorpay_signature
+    )
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Payment verification failed: cryptographic signature mismatch."
+        )
+
+    try:
+        upgrade_res = payment.upgrade_user_membership(
+            user_id=user["id"],
+            payment_id=req.razorpay_payment_id
+        )
+        return {
+            "status": "success",
+            "message": "Payment verified successfully. Welcome to Pro Membership!",
+            "user": upgrade_res["user"],
+            "trial_status": upgrade_res["trial_status"],
+            "payment_id": req.razorpay_payment_id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upgrade user in database: {str(e)}")
 
 
 # ---------------------------------------------------------------------------

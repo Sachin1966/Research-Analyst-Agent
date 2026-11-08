@@ -117,3 +117,4 @@ def verify_trial_or_pro(user: Dict[str, Any]):
             }
         )
     return status_info
+

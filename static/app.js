@@ -1508,12 +1508,152 @@ function setupAuthListeners() {
         });
     }
 
-    // Razorpay Checkout Button in Upgrade Modal (Step 2 readiness)
+    // Razorpay Checkout Button in Upgrade Modal (Real Payment Integration)
     const razorpayBtn = document.getElementById('razorpay-checkout-btn');
     if (razorpayBtn) {
-        razorpayBtn.addEventListener('click', () => {
-            alert("🚀 Razorpay Payment Gateway integration is ready! In Step 2, this will open the live Razorpay checkout dialog (₹499/mo) and upgrade your account to Pro upon payment confirmation.");
+        razorpayBtn.addEventListener('click', handleRazorpayCheckout);
+    }
+}
+
+async function handleRazorpayCheckout() {
+    const user = getStoredUser();
+    const token = getAuthToken();
+    const upgradeModal = document.getElementById('upgrade-modal');
+    const authModal = document.getElementById('auth-modal');
+
+    if (!user || !token) {
+        if (upgradeModal) upgradeModal.classList.add('hidden');
+        if (authModal) {
+            authModal.classList.remove('hidden');
+            const alertBox = document.getElementById('auth-alert');
+            if (alertBox) {
+                alertBox.textContent = "Please sign in or create an account first to upgrade to Pro.";
+                alertBox.className = "auth-alert info";
+                alertBox.classList.remove('hidden');
+            }
+        }
+        return;
+    }
+
+    const razorpayBtn = document.getElementById('razorpay-checkout-btn');
+    const originalText = razorpayBtn ? razorpayBtn.innerHTML : "";
+    if (razorpayBtn) {
+        razorpayBtn.disabled = true;
+        razorpayBtn.innerHTML = '<span>Initiating Secure Checkout...</span>';
+    }
+
+    try {
+        logMessage("Creating Razorpay order for Pro Membership (₹499/mo)...", "info");
+        const res = await fetch(`${getApiBase()}/api/payment/create-order`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ amount_in_rupees: 499 })
         });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to create order");
+
+        const order = data.order;
+
+        // If Razorpay JS SDK is loaded and we have an order in live mode
+        if (typeof Razorpay !== "undefined" && order.mode === "live") {
+            const options = {
+                key: order.key_id,
+                amount: order.amount,
+                currency: order.currency,
+                name: "Research Paper Agent",
+                description: "Pro Researcher — Unlimited Model & VeritasCore Access",
+                image: "favicon.svg",
+                order_id: order.order_id,
+                prefill: {
+                    name: user.name || "Researcher",
+                    email: user.email || ""
+                },
+                theme: {
+                    color: "#6366f1"
+                },
+                handler: async function (paymentResponse) {
+                    await processPaymentVerification(token, paymentResponse);
+                },
+                modal: {
+                    ondismiss: function () {
+                        logMessage("Razorpay checkout window was closed.", "info");
+                        if (razorpayBtn) {
+                            razorpayBtn.disabled = false;
+                            razorpayBtn.innerHTML = originalText;
+                        }
+                    }
+                }
+            };
+            const rzp = new Razorpay(options);
+            rzp.on('payment.failed', function (failRes) {
+                console.error("Payment failed:", failRes.error);
+                logMessage(`Payment failed: ${failRes.error.description || failRes.error.reason}`, "error");
+                alert(`Payment was not completed: ${failRes.error.description || 'Transaction cancelled'}`);
+                if (razorpayBtn) {
+                    razorpayBtn.disabled = false;
+                    razorpayBtn.innerHTML = originalText;
+                }
+            });
+            rzp.open();
+        } else {
+            // Test / Sandbox Mode Fallback Checkout
+            const confirmed = confirm(
+                `🧪 Razorpay Test / Sandbox Checkout\n\n` +
+                `Order ID: ${order.order_id}\n` +
+                `Amount: ₹${order.amount / 100} (${order.currency})\n` +
+                `Plan: Pro Researcher (Unlimited Access)\n\n` +
+                `Click OK to simulate a successful payment verification and upgrade your account to Pro!`
+            );
+
+            if (confirmed) {
+                const mockPaymentResponse = {
+                    razorpay_order_id: order.order_id,
+                    razorpay_payment_id: `pay_test_${Date.now()}`,
+                    razorpay_signature: `sig_sandbox_${Date.now()}`
+                };
+                await processPaymentVerification(token, mockPaymentResponse);
+            }
+        }
+    } catch (err) {
+        console.error("Checkout initiation error:", err);
+        alert(`Could not initiate payment: ${err.message}`);
+        logMessage(`Checkout error: ${err.message}`, "error");
+    } finally {
+        if (razorpayBtn) {
+            razorpayBtn.disabled = false;
+            razorpayBtn.innerHTML = originalText;
+        }
+    }
+}
+
+async function processPaymentVerification(token, paymentResponse) {
+    const upgradeModal = document.getElementById('upgrade-modal');
+    try {
+        logMessage("Verifying Razorpay payment cryptographic signature...", "info");
+        const verifyRes = await fetch(`${getApiBase()}/api/payment/verify`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(paymentResponse)
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyRes.ok) throw new Error(verifyData.detail || "Payment verification failed");
+
+        // Upgrade successful! Update client state
+        setAuthState(token, verifyData.user, verifyData.trial_status);
+        if (upgradeModal) upgradeModal.classList.add('hidden');
+
+        logMessage(`🎉 Payment verified! Payment ID: ${verifyData.payment_id}. You are now a PRO Member!`, "success");
+        alert("🎉 Congratulations! Your payment of ₹499 has been verified.\n\nYou are now a PRO MEMBER with unlimited access to all AI models and VeritasCore research intelligence!");
+    } catch (err) {
+        console.error("Verification error:", err);
+        alert(`Verification failed: ${err.message}`);
+        logMessage(`Payment verification failed: ${err.message}`, "error");
     }
 }
 
