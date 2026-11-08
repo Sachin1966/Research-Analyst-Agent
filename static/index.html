@@ -215,6 +215,58 @@
                     <p>Research Paper Intelligence, Autonomous Synthesis & Evidence Verification</p>
                 </div>
                 <div class="header-actions">
+                    <!-- Auth & SaaS Profile Control -->
+                    <div id="header-auth-container" class="header-auth-container">
+                        <!-- Logged Out State Button -->
+                        <button id="auth-open-btn" class="btn-auth-action" title="Sign In or Start 7-Day Free Trial">
+                            <span class="auth-sparkle">✨</span>
+                            <span class="auth-btn-label">Sign In / 7-Day Free Trial</span>
+                        </button>
+
+                        <!-- Logged In State Profile Badge (hidden when logged out) -->
+                        <div id="user-profile-widget" class="user-profile-widget hidden">
+                            <div id="header-trial-badge" class="trial-pill" title="Free Trial Status">
+                                <span class="trial-dot">🟢</span>
+                                <span id="trial-badge-text">7 Days Trial</span>
+                            </div>
+                            
+                            <div class="user-menu-wrapper">
+                                <button id="user-menu-btn" class="user-avatar-btn" aria-haspopup="true" aria-expanded="false" title="Account & Profile Settings">
+                                    <img id="user-avatar-img" class="user-avatar-pic hidden" src="" alt="User Avatar" />
+                                    <span id="user-avatar-initials" class="user-avatar-initials">R</span>
+                                    <span id="user-name-display" class="user-name-text">Researcher</span>
+                                    <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+
+                                <div id="user-dropdown-menu" class="user-dropdown-menu hidden">
+                                    <div class="dropdown-header">
+                                        <div class="dropdown-user-info">
+                                            <span id="dropdown-user-name" class="dropdown-name">Researcher</span>
+                                            <span id="dropdown-user-email" class="dropdown-email">user@example.com</span>
+                                        </div>
+                                        <span id="dropdown-plan-badge" class="dropdown-plan-badge">7-Day Trial</span>
+                                    </div>
+                                    <div class="dropdown-divider"></div>
+                                    <button id="dropdown-profile-btn" class="dropdown-item">
+                                        <span class="dropdown-icon">👤</span>
+                                        <span>Profile & Avatar Settings</span>
+                                    </button>
+                                    <button id="dropdown-subscription-btn" class="dropdown-item">
+                                        <span class="dropdown-icon">⭐</span>
+                                        <span>7-Day Trial & Plan</span>
+                                    </button>
+                                    <div class="dropdown-divider"></div>
+                                    <button id="dropdown-logout-btn" class="dropdown-item text-danger">
+                                        <span class="dropdown-icon">🚪</span>
+                                        <span>Sign Out</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <span id="elapsed-timer" class="timer-display">00:00.0</span>
                 </div>
             </header>
@@ -521,6 +573,246 @@
                 </div>
 
         </main>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Authentication Modal (Sign In / 7-Day Free Trial Register)  -->
+    <!-- ============================================================ -->
+    <div id="auth-modal" class="modal-backdrop hidden">
+        <div class="modal-card auth-modal-card">
+            <button class="modal-close-btn" id="auth-modal-close" title="Close">✕</button>
+            
+            <div class="auth-modal-header">
+                <div class="auth-header-brand">
+                    <span class="auth-sparkle-badge">✨ SaaS Member Access</span>
+                    <h2>Research Paper Intelligence</h2>
+                    <p>Sign in to your account or register to unlock your <strong>7-Day Free Trial</strong> with unlimited AI model access.</p>
+                </div>
+
+                <div class="auth-tabs">
+                    <button id="tab-login-btn" class="auth-tab-btn active" type="button">Sign In</button>
+                    <button id="tab-register-btn" class="auth-tab-btn" type="button">Create Account <span class="tab-highlight-tag">7-Day Free</span></button>
+                </div>
+            </div>
+
+            <!-- Error / Success Alert Box -->
+            <div id="auth-alert" class="auth-alert hidden"></div>
+
+            <!-- Sign In Form -->
+            <form id="login-form" class="auth-form">
+                <div class="form-group-auth">
+                    <label for="login-email">Email Address</label>
+                    <div class="input-with-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        <input type="email" id="login-email" placeholder="name@example.com" required autocomplete="email" />
+                    </div>
+                </div>
+                <div class="form-group-auth">
+                    <label for="login-password">Password</label>
+                    <div class="input-with-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password" />
+                    </div>
+                </div>
+                <button type="submit" id="login-submit-btn" class="btn-auth-submit">
+                    <span>Sign In to Workspace</span>
+                </button>
+                <div class="auth-footer-prompt">
+                    <span>Don't have an account?</span>
+                    <a href="javascript:void(0)" id="switch-to-register-link">Start your 7-Day Free Trial</a>
+                </div>
+            </form>
+
+            <!-- Register Form -->
+            <form id="register-form" class="auth-form hidden">
+                <div class="free-trial-banner">
+                    <div class="trial-banner-icon">🎁</div>
+                    <div class="trial-banner-content">
+                        <strong>7-Day Free Trial Included</strong>
+                        <p>Instant full access to all AI models, VeritasCore Evidence DNA & private research history. No credit card required!</p>
+                    </div>
+                </div>
+
+                <div class="form-group-auth">
+                    <label for="register-name">Full Name or Title</label>
+                    <div class="input-with-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        <input type="text" id="register-name" placeholder="Dr. Jane Doe / AI Researcher" required autocomplete="name" />
+                    </div>
+                </div>
+
+                <div class="form-group-auth">
+                    <label for="register-email">Work or Academic Email</label>
+                    <div class="input-with-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        <input type="email" id="register-email" placeholder="researcher@university.edu" required autocomplete="email" />
+                    </div>
+                </div>
+
+                <div class="form-group-auth">
+                    <label for="register-password">Password (min 6 characters)</label>
+                    <div class="input-with-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <input type="password" id="register-password" placeholder="Create a secure password" minlength="6" required autocomplete="new-password" />
+                    </div>
+                </div>
+
+                <!-- Avatar Selection Presets -->
+                <div class="form-group-auth">
+                    <label>Choose Avatar / Profile Picture</label>
+                    <div class="avatar-presets-grid" id="register-avatar-presets">
+                        <button type="button" class="avatar-preset-btn active" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Scientist">🤖 AI</button>
+                        <button type="button" class="avatar-preset-btn" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Quantum">🧬 Bio</button>
+                        <button type="button" class="avatar-preset-btn" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Arxiv">🔬 Lab</button>
+                        <button type="button" class="avatar-preset-btn" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Veritas">🧑‍💻 Coder</button>
+                        <button type="button" class="avatar-preset-btn" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Alpha">👩‍🔬 Scholar</button>
+                    </div>
+                    <input type="url" id="register-avatar-url" placeholder="Or paste custom image/avatar URL (optional)" style="margin-top: 6px;" />
+                </div>
+
+                <button type="submit" id="register-submit-btn" class="btn-auth-submit btn-trial-highlight">
+                    <span>Activate 7-Day Free Trial & Register</span>
+                </button>
+                <div class="auth-footer-prompt">
+                    <span>Already have an account?</span>
+                    <a href="javascript:void(0)" id="switch-to-login-link">Sign in here</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- User Profile & Avatar Settings Modal                          -->
+    <!-- ============================================================ -->
+    <div id="profile-modal" class="modal-backdrop hidden">
+        <div class="modal-card profile-modal-card">
+            <button class="modal-close-btn" id="profile-modal-close" title="Close">✕</button>
+
+            <div class="modal-title-row">
+                <span class="modal-badge-icon">👤</span>
+                <div>
+                    <h2>Researcher Profile Settings</h2>
+                    <p>Customize your identity, avatar, and view your 7-day free trial status</p>
+                </div>
+            </div>
+
+            <div id="profile-alert" class="auth-alert hidden"></div>
+
+            <form id="profile-form" class="profile-settings-form">
+                <!-- Avatar Preview & Selector -->
+                <div class="profile-avatar-row">
+                    <div class="profile-avatar-preview-box">
+                        <img id="profile-preview-img" class="profile-preview-img" src="" alt="Avatar Preview" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=Scientist';" />
+                    </div>
+                    <div class="profile-avatar-controls">
+                        <label>Select Avatar Preset or Custom Image</label>
+                        <div class="avatar-presets-grid" id="profile-avatar-presets">
+                            <button type="button" class="avatar-preset-btn" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Scientist">🤖 AI</button>
+                            <button type="button" class="avatar-preset-btn" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Quantum">🧬 Bio</button>
+                            <button type="button" class="avatar-preset-btn" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Arxiv">🔬 Lab</button>
+                            <button type="button" class="avatar-preset-btn" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Veritas">🧑‍💻 Coder</button>
+                            <button type="button" class="avatar-preset-btn" data-avatar="https://api.dicebear.com/7.x/bottts/svg?seed=Alpha">👩‍🔬 Scholar</button>
+                        </div>
+                        <input type="url" id="profile-avatar-input" placeholder="Custom Avatar Image URL (https://...)" />
+                    </div>
+                </div>
+
+                <div class="form-group-auth">
+                    <label for="profile-name-input">Display Name</label>
+                    <input type="text" id="profile-name-input" placeholder="Your Name" required />
+                </div>
+
+                <div class="form-group-auth">
+                    <label for="profile-email-input">Account Email</label>
+                    <input type="email" id="profile-email-input" disabled style="opacity: 0.7; cursor: not-allowed;" />
+                </div>
+
+                <!-- 7-Day Trial Status Card -->
+                <div class="trial-status-card">
+                    <div class="trial-status-header">
+                        <div class="trial-status-info">
+                            <span class="status-indicator-dot" id="trial-indicator-dot">🟢</span>
+                            <span class="trial-status-label" id="trial-status-headline">7-Day Free Trial Active</span>
+                        </div>
+                        <span class="trial-status-badge" id="trial-status-badge">Trial</span>
+                    </div>
+                    <p class="trial-status-detail" id="trial-status-detail">6 days and 23 hours remaining on your free trial.</p>
+                    <div class="trial-progress-bar-bg">
+                        <div class="trial-progress-bar-fill" id="trial-progress-bar-fill" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <div class="profile-actions-row">
+                    <button type="button" id="profile-upgrade-btn" class="btn-upgrade-action">
+                        <span>⭐ Upgrade to Pro (Razorpay)</span>
+                    </button>
+                    <button type="submit" id="profile-save-btn" class="btn-primary">
+                        <span>Save Changes</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Pro Upgrade & Razorpay Readiness Modal                       -->
+    <!-- ============================================================ -->
+    <div id="upgrade-modal" class="modal-backdrop hidden">
+        <div class="modal-card upgrade-modal-card">
+            <button class="modal-close-btn" id="upgrade-modal-close" title="Close">✕</button>
+
+            <div class="upgrade-modal-header">
+                <span class="pro-crown-badge">👑 PRO RESEARCHER</span>
+                <h2>Unlock Unlimited AI Intelligence</h2>
+                <p>Never worry about trial limits. Conduct unlimited deep scholarly research across all LLM models.</p>
+            </div>
+
+            <div class="pro-pricing-box">
+                <div class="pricing-amount">
+                    <span class="currency">₹</span>
+                    <span class="price">499</span>
+                    <span class="period">/ month</span>
+                </div>
+                <div class="pricing-sub">Full access • Instant activation via Razorpay • Cancel anytime</div>
+            </div>
+
+            <div class="pro-features-list">
+                <div class="pro-feature-item">
+                    <span class="feat-check">✓</span>
+                    <div>
+                        <strong>Unlimited Model Analysis</strong>
+                        <p>Analyze research papers with all supported models without any trial limits.</p>
+                    </div>
+                </div>
+                <div class="pro-feature-item">
+                    <span class="feat-check">✓</span>
+                    <div>
+                        <strong>VeritasCore Evidence DNA Grounding</strong>
+                        <p>Deep claim-level verification and verbatim passage linking for every citation.</p>
+                    </div>
+                </div>
+                <div class="pro-feature-item">
+                    <span class="feat-check">✓</span>
+                    <div>
+                        <strong>Private SQLite Cloud History</strong>
+                        <p>Your research runs, evidence tables, and findings safely stored and accessible forever.</p>
+                    </div>
+                </div>
+                <div class="pro-feature-item">
+                    <span class="feat-check">✓</span>
+                    <div>
+                        <strong>1-Click Markdown & PDF Export</strong>
+                        <p>Ready-to-publish academic summaries and literature reviews.</p>
+                    </div>
+                </div>
+            </div>
+
+            <button id="razorpay-checkout-btn" class="btn-razorpay-checkout">
+                <span>Proceed with Razorpay Payment</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </button>
+            <p class="razorpay-notice">Secure 256-bit encrypted checkout via Razorpay (UPI, Credit/Debit Cards, NetBanking)</p>
+        </div>
     </div>
 
     <!-- Main JavaScript Logic -->

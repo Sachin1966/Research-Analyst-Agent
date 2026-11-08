@@ -109,6 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup Audit Filter Buttons and Navigation Tabs
     setupAuditFilters();
     setupCapabilityTabs();
+
+    // SaaS Authentication, Profile & 7-Day Free Trial initialization
+    setupAuthListeners();
+    refreshCurrentUser();
 });
 
 // ---------------------------------------------------------------------------
@@ -368,7 +372,9 @@ function startResearchPipeline() {
     // 2. Open Server-Sent Events (SSE) Stream
     const encodedQuery = encodeURIComponent(query);
     const modelParam = selectedModel ? `&model=${encodeURIComponent(selectedModel)}` : '';
-    const sseUrl = `${getApiBase()}/api/research/stream?query=${encodedQuery}${modelParam}`;
+    const token = getAuthToken();
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+    const sseUrl = `${getApiBase()}/api/research/stream?query=${encodedQuery}${modelParam}${tokenParam}`;
     
     logMessage(`Establishing connection to SSE stream endpoint...`, 'info');
     eventSource = new EventSource(sseUrl);
@@ -586,8 +592,15 @@ function handlePipelineEvent(event) {
             break;
             
         case "error":
-            logMessage(`Pipeline Error: ${event.message}`, 'error');
-            terminatePipelineRun("Failed", `Error: ${event.message}`, "red");
+            if (event.error === 'TRIAL_EXPIRED') {
+                logMessage(`⚠️ ${event.message}`, 'error');
+                terminatePipelineRun("Trial Expired", event.message, "red");
+                const upgradeModal = document.getElementById('upgrade-modal');
+                if (upgradeModal) upgradeModal.classList.remove('hidden');
+            } else {
+                logMessage(`Pipeline Error: ${event.message}`, 'error');
+                terminatePipelineRun("Failed", `Error: ${event.message}`, "red");
+            }
             break;
     }
 }
@@ -837,7 +850,11 @@ function terminatePipelineRun(statusText, logText, pulseColor) {
 
 async function fetchHistory() {
     try {
-        const res = await fetch(`${getApiBase()}/api/history?limit=50`);
+        const headers = {};
+        const token = getAuthToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${getApiBase()}/api/history?limit=50`, { headers });
         if (!res.ok) throw new Error("Database request failed");
         const data = await res.json();
         sessionHistory = data.history || [];
@@ -1057,4 +1074,503 @@ function escapeHtml(unsafe) {
          .replace(/>/g, "&gt;")
          .replace(/"/g, "&quot;")
          .replace(/'/g, "&#039;");
+}
+
+
+// ============================================================
+// SaaS Authentication, 7-Day Free Trial & Profile Management
+// ============================================================
+
+const AUTH_TOKEN_KEY = 'veritas_auth_token';
+const AUTH_USER_KEY = 'veritas_auth_user';
+
+function getAuthToken() {
+    return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+function getStoredUser() {
+    try {
+        const u = localStorage.getItem(AUTH_USER_KEY);
+        return u ? JSON.parse(u) : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function setAuthState(token, user, trialStatus) {
+    if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+    if (user) {
+        if (trialStatus) user.trial_status = trialStatus;
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    }
+    updateAuthUI();
+}
+
+function clearAuthState() {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
+    updateAuthUI();
+    fetchHistory();
+}
+
+function updateAuthUI() {
+    const token = getAuthToken();
+    const user = getStoredUser();
+
+    const authOpenBtn = document.getElementById('auth-open-btn');
+    const userProfileWidget = document.getElementById('user-profile-widget');
+
+    if (!token || !user) {
+        if (authOpenBtn) authOpenBtn.classList.remove('hidden');
+        if (userProfileWidget) userProfileWidget.classList.add('hidden');
+        return;
+    }
+
+    if (authOpenBtn) authOpenBtn.classList.add('hidden');
+    if (userProfileWidget) userProfileWidget.classList.remove('hidden');
+
+    // Update Header Elements
+    const nameDisplay = document.getElementById('user-name-display');
+    const avatarImg = document.getElementById('user-avatar-img');
+    const avatarInitials = document.getElementById('user-avatar-initials');
+    const trialBadgeText = document.getElementById('trial-badge-text');
+    const headerTrialBadge = document.getElementById('header-trial-badge');
+
+    if (nameDisplay) nameDisplay.textContent = user.name || "Researcher";
+
+    if (user.avatar_url && user.avatar_url.trim()) {
+        if (avatarImg) {
+            avatarImg.src = user.avatar_url;
+            avatarImg.classList.remove('hidden');
+            avatarImg.style.display = 'block';
+        }
+        if (avatarInitials) avatarInitials.style.display = 'none';
+    } else {
+        if (avatarImg) {
+            avatarImg.classList.add('hidden');
+            avatarImg.style.display = 'none';
+        }
+        if (avatarInitials) {
+            avatarInitials.style.display = 'flex';
+            avatarInitials.textContent = (user.name || "R").charAt(0).toUpperCase();
+        }
+    }
+
+    // Trial / Pro Badge
+    const trial = user.trial_status || {};
+    if (user.is_pro || trial.is_pro) {
+        if (trialBadgeText) trialBadgeText.textContent = "⭐ Pro Member";
+        if (headerTrialBadge) {
+            headerTrialBadge.className = "trial-pill pro";
+            headerTrialBadge.innerHTML = '<span class="trial-dot">⭐</span><span id="trial-badge-text">Pro Member</span>';
+        }
+    } else if (trial.is_active) {
+        const days = trial.days_left !== undefined ? trial.days_left : 7;
+        const hours = trial.hours_left !== undefined ? trial.hours_left : 0;
+        const text = days > 0 ? `${days}d left (Trial)` : `${hours}h left (Trial)`;
+        if (trialBadgeText) trialBadgeText.textContent = text;
+        if (headerTrialBadge) {
+            headerTrialBadge.className = days <= 1 ? "trial-pill warning" : "trial-pill";
+            headerTrialBadge.innerHTML = `<span class="trial-dot">${days <= 1 ? '⏳' : '🟢'}</span><span id="trial-badge-text">${text}</span>`;
+        }
+    } else {
+        if (trialBadgeText) trialBadgeText.textContent = "Trial Expired";
+        if (headerTrialBadge) {
+            headerTrialBadge.className = "trial-pill warning";
+            headerTrialBadge.innerHTML = '<span class="trial-dot">🔴</span><span id="trial-badge-text">Trial Expired</span>';
+        }
+    }
+
+    // Update Dropdown elements
+    const dropName = document.getElementById('dropdown-user-name');
+    const dropEmail = document.getElementById('dropdown-user-email');
+    const dropBadge = document.getElementById('dropdown-plan-badge');
+
+    if (dropName) dropName.textContent = user.name || "Researcher";
+    if (dropEmail) dropEmail.textContent = user.email || "";
+    if (dropBadge) {
+        if (user.is_pro) {
+            dropBadge.textContent = "Pro";
+            dropBadge.className = "dropdown-plan-badge pro";
+        } else if (trial.is_active) {
+            dropBadge.textContent = `${trial.days_left || 7}d Free Trial`;
+            dropBadge.className = "dropdown-plan-badge";
+        } else {
+            dropBadge.textContent = "Expired";
+            dropBadge.className = "dropdown-plan-badge expired";
+        }
+    }
+}
+
+// Check session on page load with server
+async function refreshCurrentUser() {
+    const token = getAuthToken();
+    if (!token) {
+        updateAuthUI();
+        return;
+    }
+    try {
+        const res = await fetch(`${getApiBase()}/api/auth/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            setAuthState(token, data.user, data.trial_status);
+        } else if (res.status === 401) {
+            clearAuthState();
+        }
+    } catch (err) {
+        console.warn("Could not verify session with server, using cached user:", err);
+        updateAuthUI();
+    }
+}
+
+// Setup Auth Modal & Event Listeners
+function setupAuthListeners() {
+    const authModal = document.getElementById('auth-modal');
+    const profileModal = document.getElementById('profile-modal');
+    const upgradeModal = document.getElementById('upgrade-modal');
+    
+    const authOpenBtn = document.getElementById('auth-open-btn');
+    const authCloseBtn = document.getElementById('auth-modal-close');
+    const profileCloseBtn = document.getElementById('profile-modal-close');
+    const upgradeCloseBtn = document.getElementById('upgrade-modal-close');
+
+    const tabLoginBtn = document.getElementById('tab-login-btn');
+    const tabRegisterBtn = document.getElementById('tab-register-btn');
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const switchToRegister = document.getElementById('switch-to-register-link');
+    const switchToLogin = document.getElementById('switch-to-login-link');
+    const authAlert = document.getElementById('auth-alert');
+
+    // User Menu dropdown toggle
+    const userMenuBtn = document.getElementById('user-menu-btn');
+    const userDropdownMenu = document.getElementById('user-dropdown-menu');
+
+    if (userMenuBtn && userDropdownMenu) {
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdownMenu.classList.toggle('hidden');
+        });
+        document.addEventListener('click', () => {
+            userDropdownMenu.classList.add('hidden');
+        });
+        userDropdownMenu.addEventListener('click', (e) => e.stopPropagation());
+    }
+
+    // Dropdown Action Buttons
+    const dropProfileBtn = document.getElementById('dropdown-profile-btn');
+    const dropSubBtn = document.getElementById('dropdown-subscription-btn');
+    const dropLogoutBtn = document.getElementById('dropdown-logout-btn');
+
+    if (dropProfileBtn) {
+        dropProfileBtn.addEventListener('click', () => {
+            if (userDropdownMenu) userDropdownMenu.classList.add('hidden');
+            openProfileModal();
+        });
+    }
+
+    if (dropSubBtn) {
+        dropSubBtn.addEventListener('click', () => {
+            if (userDropdownMenu) userDropdownMenu.classList.add('hidden');
+            if (upgradeModal) upgradeModal.classList.remove('hidden');
+        });
+    }
+
+    if (dropLogoutBtn) {
+        dropLogoutBtn.addEventListener('click', () => {
+            if (userDropdownMenu) userDropdownMenu.classList.add('hidden');
+            clearAuthState();
+            logMessage("Signed out successfully.", 'info');
+        });
+    }
+
+    // Modal Open / Close
+    if (authOpenBtn) {
+        authOpenBtn.addEventListener('click', () => {
+            showAuthModal('login');
+        });
+    }
+    if (authCloseBtn) {
+        authCloseBtn.addEventListener('click', () => {
+            authModal.classList.add('hidden');
+        });
+    }
+    if (profileCloseBtn) {
+        profileCloseBtn.addEventListener('click', () => {
+            profileModal.classList.add('hidden');
+        });
+    }
+    if (upgradeCloseBtn) {
+        upgradeCloseBtn.addEventListener('click', () => {
+            upgradeModal.classList.add('hidden');
+        });
+    }
+
+    // Close on backdrop click
+    [authModal, profileModal, upgradeModal].forEach(m => {
+        if (!m) return;
+        m.addEventListener('click', (e) => {
+            if (e.target === m) m.classList.add('hidden');
+        });
+    });
+
+    // Tab switching in Auth Modal
+    function showAuthModal(tab) {
+        if (!authModal) return;
+        authAlert.classList.add('hidden');
+        authModal.classList.remove('hidden');
+        if (tab === 'register') {
+            tabRegisterBtn.classList.add('active');
+            tabLoginBtn.classList.remove('active');
+            registerForm.classList.remove('hidden');
+            loginForm.classList.add('hidden');
+        } else {
+            tabLoginBtn.classList.add('active');
+            tabRegisterBtn.classList.remove('active');
+            loginForm.classList.remove('hidden');
+            registerForm.classList.add('hidden');
+        }
+    }
+
+    if (tabLoginBtn) tabLoginBtn.addEventListener('click', () => showAuthModal('login'));
+    if (tabRegisterBtn) tabRegisterBtn.addEventListener('click', () => showAuthModal('register'));
+    if (switchToRegister) switchToRegister.addEventListener('click', () => showAuthModal('register'));
+    if (switchToLogin) switchToLogin.addEventListener('click', () => showAuthModal('login'));
+
+    // Avatar Presets Selector in Register
+    const regAvatarPresets = document.querySelectorAll('#register-avatar-presets .avatar-preset-btn');
+    const regAvatarUrlInput = document.getElementById('register-avatar-url');
+    regAvatarPresets.forEach(btn => {
+        btn.addEventListener('click', () => {
+            regAvatarPresets.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (regAvatarUrlInput) regAvatarUrlInput.value = btn.getAttribute('data-avatar');
+        });
+    });
+
+    // Profile Modal Avatar Presets & Preview
+    const profileAvatarPresets = document.querySelectorAll('#profile-avatar-presets .avatar-preset-btn');
+    const profileAvatarInput = document.getElementById('profile-avatar-input');
+    const profilePreviewImg = document.getElementById('profile-preview-img');
+
+    profileAvatarPresets.forEach(btn => {
+        btn.addEventListener('click', () => {
+            profileAvatarPresets.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const url = btn.getAttribute('data-avatar');
+            if (profileAvatarInput) profileAvatarInput.value = url;
+            if (profilePreviewImg) profilePreviewImg.src = url;
+        });
+    });
+
+    if (profileAvatarInput) {
+        profileAvatarInput.addEventListener('input', () => {
+            const url = profileAvatarInput.value.trim();
+            if (url && profilePreviewImg) profilePreviewImg.src = url;
+        });
+    }
+
+    // Handle Login Form Submit
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            const submitBtn = document.getElementById('login-submit-btn');
+
+            submitBtn.disabled = true;
+            submitBtn.querySelector('span').textContent = "Signing In...";
+            authAlert.classList.add('hidden');
+
+            try {
+                const res = await fetch(`${getApiBase()}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Login failed");
+
+                setAuthState(data.token, data.user, data.trial_status);
+                authModal.classList.add('hidden');
+                loginForm.reset();
+                fetchHistory(); // Refresh user's personal research history
+                logMessage(`Welcome back, ${data.user.name}! 7-Day trial active.`, 'success');
+            } catch (err) {
+                authAlert.textContent = err.message;
+                authAlert.className = "auth-alert error";
+                authAlert.classList.remove('hidden');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.querySelector('span').textContent = "Sign In to Workspace";
+            }
+        });
+    }
+
+    // Handle Register Form Submit
+    if (registerForm) {
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('register-name').value.trim();
+            const email = document.getElementById('register-email').value.trim();
+            const password = document.getElementById('register-password').value;
+            let avatar_url = (regAvatarUrlInput && regAvatarUrlInput.value.trim()) || "";
+            if (!avatar_url) {
+                const activePreset = document.querySelector('#register-avatar-presets .avatar-preset-btn.active');
+                if (activePreset) avatar_url = activePreset.getAttribute('data-avatar');
+            }
+
+            const submitBtn = document.getElementById('register-submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.querySelector('span').textContent = "Activating Free Trial...";
+            authAlert.classList.add('hidden');
+
+            try {
+                const res = await fetch(`${getApiBase()}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, name, avatar_url })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Registration failed");
+
+                setAuthState(data.token, data.user, data.trial_status);
+                authModal.classList.add('hidden');
+                registerForm.reset();
+                fetchHistory();
+                logMessage(`🎉 Welcome, ${data.user.name}! 7-Day Free Trial activated with unlimited AI models!`, 'success');
+            } catch (err) {
+                authAlert.textContent = err.message;
+                authAlert.className = "auth-alert error";
+                authAlert.classList.remove('hidden');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.querySelector('span').textContent = "Activate 7-Day Free Trial & Register";
+            }
+        });
+    }
+
+    // Handle Profile Form Submit
+    const profileForm = document.getElementById('profile-form');
+    if (profileForm) {
+        profileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = getAuthToken();
+            if (!token) return;
+
+            const name = document.getElementById('profile-name-input').value.trim();
+            const avatar_url = document.getElementById('profile-avatar-input').value.trim();
+            const saveBtn = document.getElementById('profile-save-btn');
+            const profileAlert = document.getElementById('profile-alert');
+
+            saveBtn.disabled = true;
+            saveBtn.querySelector('span').textContent = "Saving...";
+
+            try {
+                const res = await fetch(`${getApiBase()}/api/auth/profile`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ name, avatar_url })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Profile update failed");
+
+                setAuthState(token, data.user, data.trial_status);
+                profileAlert.textContent = "Profile updated successfully!";
+                profileAlert.className = "auth-alert success";
+                profileAlert.classList.remove('hidden');
+                setTimeout(() => {
+                    profileModal.classList.add('hidden');
+                    profileAlert.classList.add('hidden');
+                }, 1200);
+            } catch (err) {
+                profileAlert.textContent = err.message;
+                profileAlert.className = "auth-alert error";
+                profileAlert.classList.remove('hidden');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.querySelector('span').textContent = "Save Changes";
+            }
+        });
+    }
+
+    // Profile Upgrade button inside Profile Modal
+    const profileUpgradeBtn = document.getElementById('profile-upgrade-btn');
+    if (profileUpgradeBtn) {
+        profileUpgradeBtn.addEventListener('click', () => {
+            profileModal.classList.add('hidden');
+            if (upgradeModal) upgradeModal.classList.remove('hidden');
+        });
+    }
+
+    // Razorpay Checkout Button in Upgrade Modal (Step 2 readiness)
+    const razorpayBtn = document.getElementById('razorpay-checkout-btn');
+    if (razorpayBtn) {
+        razorpayBtn.addEventListener('click', () => {
+            alert("🚀 Razorpay Payment Gateway integration is ready! In Step 2, this will open the live Razorpay checkout dialog (₹499/mo) and upgrade your account to Pro upon payment confirmation.");
+        });
+    }
+}
+
+function openProfileModal() {
+    const user = getStoredUser();
+    if (!user) {
+        document.getElementById('auth-modal').classList.remove('hidden');
+        return;
+    }
+    const profileModal = document.getElementById('profile-modal');
+    const profileAlert = document.getElementById('profile-alert');
+    if (profileAlert) profileAlert.classList.add('hidden');
+
+    document.getElementById('profile-name-input').value = user.name || "";
+    document.getElementById('profile-email-input').value = user.email || "";
+    document.getElementById('profile-avatar-input').value = user.avatar_url || "";
+    
+    const preview = document.getElementById('profile-preview-img');
+    if (preview) {
+        preview.src = user.avatar_url || "https://api.dicebear.com/7.x/bottts/svg?seed=Scientist";
+    }
+
+    // Trial status in profile modal
+    const trial = user.trial_status || {};
+    const headline = document.getElementById('trial-status-headline');
+    const detail = document.getElementById('trial-status-detail');
+    const badge = document.getElementById('trial-status-badge');
+    const dot = document.getElementById('trial-indicator-dot');
+    const fill = document.getElementById('trial-progress-bar-fill');
+
+    if (user.is_pro || trial.is_pro) {
+        if (headline) headline.textContent = "Pro Member";
+        if (detail) detail.textContent = "Unlimited access to all models, VeritasCore grounding & priority compute.";
+        if (badge) badge.textContent = "Pro";
+        if (dot) dot.textContent = "⭐";
+        if (fill) {
+            fill.style.width = "100%";
+            fill.style.background = "linear-gradient(90deg, #f59e0b, #eab308)";
+        }
+    } else if (trial.is_active) {
+        const days = trial.days_left !== undefined ? trial.days_left : 7;
+        const hours = trial.hours_left !== undefined ? trial.hours_left : 0;
+        if (headline) headline.textContent = "7-Day Free Trial Active";
+        if (detail) detail.textContent = `${days} days and ${hours} hours remaining on your free trial.`;
+        if (badge) badge.textContent = "Trial";
+        if (dot) dot.textContent = "🟢";
+        if (fill) {
+            const pct = Math.max(10, Math.min(100, Math.round((days / 7) * 100)));
+            fill.style.width = `${pct}%`;
+        }
+    } else {
+        if (headline) headline.textContent = "Free Trial Expired";
+        if (detail) detail.textContent = "Your 7-day free trial has expired. Upgrade to Pro to continue unlimited model access.";
+        if (badge) badge.textContent = "Expired";
+        if (dot) dot.textContent = "🔴";
+        if (fill) fill.style.width = "0%";
+    }
+
+    profileModal.classList.remove('hidden');
 }

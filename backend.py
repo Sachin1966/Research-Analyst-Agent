@@ -9,7 +9,9 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 load_dotenv()
 
-from fastapi import FastAPI, Query, HTTPException, Body
+from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, Field
+from fastapi import FastAPI, Query, HTTPException, Body, Depends, Header, Cookie
 from fastapi.responses import StreamingResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,8 +21,24 @@ from agents import ResearchPipeline
 import llm
 import tools
 import database
+import auth
 
 app = FastAPI(title="Multi-Agent Research Assistant API with VeritasCore & SQLite History")
+
+# Pydantic Schemas for Authentication & User Profiles
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: Optional[str] = "Researcher"
+    avatar_url: Optional[str] = ""
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class ProfileUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 # Enable CORS for local development
 app.add_middleware(
@@ -98,15 +116,110 @@ async def get_config():
 
 
 # ---------------------------------------------------------------------------
+# Authentication, Profile & 7-Day Free Trial Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest):
+    """Registers a new user account with an automatic 7-day free trial."""
+    email = req.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Please provide a valid email address.")
+    if not req.password or len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters long.")
+
+    existing = database.get_user_by_email(email)
+    if existing:
+        raise HTTPException(status_code=400, detail="An account with this email already exists. Please log in.")
+
+    password_hash = auth.hash_password(req.password)
+    user = database.create_user(
+        email=email,
+        password_hash=password_hash,
+        name=req.name or "Researcher",
+        avatar_url=req.avatar_url or "",
+        trial_days=7
+    )
+    token = auth.create_access_token(user["id"], user["email"])
+    trial_status = database.get_user_trial_status(user)
+    return {
+        "status": "success",
+        "token": token,
+        "user": user,
+        "trial_status": trial_status
+    }
+
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest):
+    """Authenticates user and returns JWT token and 7-day trial status."""
+    email = req.email.strip().lower()
+    user = database.get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+    if not auth.verify_password(req.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+    token = auth.create_access_token(user["id"], user["email"])
+    trial_status = database.get_user_trial_status(user)
+    safe_user = {k: v for k, v in user.items() if k != "password_hash"}
+    safe_user["is_pro"] = bool(safe_user.get("is_pro", False))
+
+    return {
+        "status": "success",
+        "token": token,
+        "user": safe_user,
+        "trial_status": trial_status
+    }
+
+
+@app.get("/api/auth/me")
+async def get_current_user_profile(user: dict = Depends(auth.get_current_user)):
+    """Returns the authenticated user's profile and live trial countdown status."""
+    trial_status = database.get_user_trial_status(user)
+    return {
+        "status": "success",
+        "user": user,
+        "trial_status": trial_status
+    }
+
+
+@app.put("/api/auth/profile")
+async def update_profile(req: ProfileUpdateRequest, user: dict = Depends(auth.get_current_user)):
+    """Updates user display name and/or avatar image URL."""
+    success = database.update_user_profile(
+        user_id=user["id"],
+        name=req.name,
+        avatar_url=req.avatar_url
+    )
+    if not success and req.name is None and req.avatar_url is None:
+        raise HTTPException(status_code=400, detail="No profile updates were provided.")
+
+    updated_user = database.get_user_by_id(user["id"])
+    trial_status = database.get_user_trial_status(updated_user)
+    return {
+        "status": "success",
+        "user": updated_user,
+        "trial_status": trial_status
+    }
+
+
+# ---------------------------------------------------------------------------
 # Persistent Chat / Research History Endpoints (SQLite)
 # ---------------------------------------------------------------------------
 
 @app.get("/api/history")
-async def list_history(limit: int = Query(50, description="Max history items")):
-    """Get recent research history sessions from SQLite database."""
+async def list_history(
+    limit: int = Query(50, description="Max history items"),
+    user: Optional[dict] = Depends(auth.get_optional_user)
+):
+    """Get recent research history sessions from SQLite database.
+    If authenticated, returns the user's private sessions."""
     try:
-        sessions = database.get_all_sessions(limit=limit)
-        return {"status": "success", "history": sessions}
+        user_id = user["id"] if user else None
+        sessions = database.get_all_sessions(limit=limit, user_id=user_id)
+        return {"status": "success", "history": sessions, "user": user["email"] if user else None}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
 
@@ -163,12 +276,31 @@ async def clear_all_history():
 @app.get("/api/research/stream")
 async def stream_research(
     query: str = Query(..., description="The research question to answer"),
-    model: str = Query(None, description="Ollama model to use")
+    model: str = Query(None, description="Ollama model to use"),
+    token: Optional[str] = Query(None, description="JWT auth token for EventSource SSE"),
+    user: Optional[dict] = Depends(auth.get_optional_user)
 ):
     """Run the multi-agent research pipeline, stream progress updates in real-time via SSE,
-    and automatically persist completed research runs into SQLite database."""
+    and automatically persist completed research runs into SQLite database linked to the user account."""
     if not query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    # If user was not resolved via header or cookie, check token query parameter (standard for EventSource)
+    if not user and token:
+        payload = auth.decode_access_token(token)
+        if payload and "sub" in payload:
+            try:
+                user = database.get_user_by_id(int(payload["sub"]))
+            except Exception:
+                user = None
+
+    # Check 7-day free trial status if user is registered
+    if user:
+        trial_status = database.get_user_trial_status(user)
+        if not trial_status.get("is_active", True):
+            async def expired_generator():
+                yield f"data: {json.dumps({'status': 'error', 'error': 'TRIAL_EXPIRED', 'message': 'Your 7-day free trial has expired. Upgrade to Pro for unlimited AI model access.'})}\n\n"
+            return StreamingResponse(expired_generator(), media_type="text/event-stream")
 
     async def event_generator():
         pipeline = ResearchPipeline(model=model)
@@ -184,7 +316,7 @@ async def stream_research(
                 sub_questions = event.get("sub_questions", [])
 
             elif status == "completed":
-                # Automatically persist completed session to SQLite database
+                # Automatically persist completed session to SQLite database linked to user
                 try:
                     elapsed_sec = time.time() - t0
                     mins = int(elapsed_sec // 60)
@@ -201,7 +333,8 @@ async def stream_research(
                         worker_results=event.get("worker_results", []),
                         paper_summaries=veritas_data.get("paper_summaries", []),
                         evidence_dna=veritas_data.get("evidence_dna", []),
-                        audit_report=veritas_data.get("audit_report", {})
+                        audit_report=veritas_data.get("audit_report", {}),
+                        user_id=user["id"] if user else None
                     )
                     event["session_id"] = session_id
                 except Exception as db_err:
@@ -213,13 +346,21 @@ async def stream_research(
 
 
 @app.post("/api/research")
-async def run_research(payload: dict):
+async def run_research(payload: dict, user: Optional[dict] = Depends(auth.get_optional_user)):
     """Execute research pipeline synchronously, persist to SQLite database, and return full JSON result."""
     query = payload.get("query", "")
     model = payload.get("model", None)
     
     if not query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    if user:
+        trial_status = database.get_user_trial_status(user)
+        if not trial_status.get("is_active", True):
+            raise HTTPException(
+                status_code=402,
+                detail="Your 7-day free trial has expired. Upgrade to Pro for unlimited AI model access."
+            )
 
     t0 = time.time()
     try:
@@ -231,7 +372,7 @@ async def run_research(payload: dict):
         secs = int(elapsed_sec % 60)
         duration_str = f"{mins:02d}:{secs:02d}"
 
-        # Persist to SQLite
+        # Persist to SQLite linked to user
         try:
             worker_dicts = [asdict(w) for w in result.worker_results]
             session_id = database.save_session(
@@ -243,7 +384,8 @@ async def run_research(payload: dict):
                 worker_results=worker_dicts,
                 paper_summaries=result.paper_summaries,
                 evidence_dna=result.evidence_dna,
-                audit_report=result.audit_report
+                audit_report=result.audit_report,
+                user_id=user["id"] if user else None
             )
             data = asdict(result)
             data["session_id"] = session_id
