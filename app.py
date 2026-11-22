@@ -25,7 +25,8 @@ st.caption(mode_label)
 
 query = st.text_input(
     "Research question",
-    value="How do multi-agent LLM systems work and where are they used in production?",
+    value="",
+    placeholder="e.g. Clinical transmission and management of Dengue fever, vLLMs throughput, quantum computing...",
 )
 run_clicked = st.button("Run research pipeline", type="primary")
 

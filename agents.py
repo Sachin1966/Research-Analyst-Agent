@@ -4,6 +4,7 @@ Integrates Guardrail, Orchestrator, Worker, Synthesizer, Critic,
 and VeritasCore (Paper Intelligence, Evidence DNA, and Claim Verification).
 """
 
+import os
 import json
 import time
 import asyncio
@@ -14,8 +15,11 @@ from tools import web_search
 from veritas import VeritasCore, PaperSummary, EvidenceDNAItem, ClaimVerificationItem, VeritasAuditReport
 
 try:
-    import mlflow
-    MLFLOW_ENABLED = True
+    if os.environ.get("DISABLE_MLFLOW") == "1":
+        MLFLOW_ENABLED = False
+    else:
+        import mlflow
+        MLFLOW_ENABLED = True
 except ImportError:
     MLFLOW_ENABLED = False
 
@@ -363,7 +367,7 @@ class ResearchPipeline:
             }
         except Exception as ex:
             print(f"VeritasCore paper summarization error: {ex}")
-            paper_summaries = self.veritas._demo_paper_summaries()
+            paper_summaries = self.veritas._demo_paper_summaries(worker_results)
             yield {
                 "status": "veritas_paper_summaries",
                 "summaries": [asdict(s) for s in paper_summaries]

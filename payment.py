@@ -147,3 +147,4 @@ def upgrade_user_membership(user_id: int, payment_id: str) -> Dict[str, Any]:
         "trial_status": trial_status,
         "payment_id": payment_id
     }
+
