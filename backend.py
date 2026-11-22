@@ -11,7 +11,7 @@ load_dotenv()
 
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
-from fastapi import FastAPI, Query, HTTPException, Body, Depends, Header, Cookie
+from fastapi import FastAPI, Request, Query, HTTPException, Body, Depends, Header, Cookie
 from fastapi.responses import StreamingResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -94,20 +94,34 @@ async def get_sitemap_xml():
 
 
 @app.get("/api/models")
-async def get_models():
-    """Fetch available models from the local Ollama instance or return supported models."""
+async def get_models(request: Request = None):
+    """Fetch available models. Automatically prioritizes Gemini for mobile / cloud users."""
+    user_agent = request.headers.get("user-agent", "").lower() if request else ""
+    is_mobile = any(m in user_agent for m in ["mobile", "android", "iphone", "ipad", "phone"]) or os.environ.get("RENDER") == "true"
+
+    models = []
+    # If Gemini API key is configured, always provide Gemini models
+    if llm.GEMINI_API_KEY:
+        models.extend(["gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest", "gemini-pro-latest"])
+
     try:
         response = requests.get(f"{llm.OLLAMA_URL}/api/tags", timeout=1)
         if response.status_code == 200:
             data = response.json()
-            models = [m["name"] for m in data.get("models", [])]
-            if models:
-                return {"status": "success", "models": models}
+            ollama_models = [m.get("name") for m in data.get("models", [])]
+            if ollama_models:
+                models.extend(ollama_models)
     except Exception:
         pass
+
+    if not models:
+        models = ["gemini-3.5-flash", "llama3:latest", "llama3:8b", "mistral:latest"]
+
     return {
         "status": "success",
-        "models": ["llama3:latest", "llama3:8b", "mistral:latest"]
+        "models": models,
+        "is_mobile": is_mobile,
+        "default_model": "gemini-3.5-flash" if (is_mobile or os.environ.get("RENDER") == "true") else llm.DEFAULT_MODEL
     }
 
 
@@ -361,8 +375,9 @@ async def clear_all_history():
 
 @app.get("/api/research/stream")
 async def stream_research(
+    request: Request,
     query: str = Query(..., description="The research question to answer"),
-    model: str = Query(None, description="Ollama model to use"),
+    model: str = Query(None, description="Ollama or Gemini model to use"),
     token: Optional[str] = Query(None, description="JWT auth token for EventSource SSE"),
     user: Optional[dict] = Depends(auth.get_optional_user)
 ):
@@ -370,6 +385,15 @@ async def stream_research(
     and automatically persist completed research runs into SQLite database linked to the user account."""
     if not query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    user_agent = request.headers.get("user-agent", "").lower() if request else ""
+    is_mobile = any(m in user_agent for m in ["mobile", "android", "iphone", "ipad", "phone"]) or os.environ.get("RENDER") == "true"
+    
+    # When accessed from mobile or deployed on Render, automatically route the entire pipeline to Gemini
+    if is_mobile and (not model or "llama" in model.lower() or "mistral" in model.lower()):
+        active_model = "gemini-3.5-flash"
+    else:
+        active_model = model or ("gemini-3.5-flash" if os.environ.get("RENDER") == "true" else llm.DEFAULT_MODEL)
 
     # If user was not resolved via header or cookie, check token query parameter (standard for EventSource)
     if not user and token:
@@ -389,7 +413,7 @@ async def stream_research(
             return StreamingResponse(expired_generator(), media_type="text/event-stream")
 
     async def event_generator():
-        pipeline = ResearchPipeline(model=model)
+        pipeline = ResearchPipeline(model=active_model)
         await asyncio.sleep(0.1)
         
         t0 = time.time()
@@ -413,7 +437,7 @@ async def stream_research(
                     session_id = database.save_session(
                         query=query,
                         final_report=event.get("final_report", ""),
-                        model=model,
+                        model=active_model,
                         duration=duration_str,
                         sub_questions=sub_questions,
                         worker_results=event.get("worker_results", []),
@@ -432,13 +456,20 @@ async def stream_research(
 
 
 @app.post("/api/research")
-async def run_research(payload: dict, user: Optional[dict] = Depends(auth.get_optional_user)):
+async def run_research(request: Request, payload: dict, user: Optional[dict] = Depends(auth.get_optional_user)):
     """Execute research pipeline synchronously, persist to SQLite database, and return full JSON result."""
     query = payload.get("query", "")
     model = payload.get("model", None)
     
     if not query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    user_agent = request.headers.get("user-agent", "").lower() if request else ""
+    is_mobile = any(m in user_agent for m in ["mobile", "android", "iphone", "ipad", "phone"]) or os.environ.get("RENDER") == "true"
+    if is_mobile and (not model or "llama" in model.lower() or "mistral" in model.lower()):
+        active_model = "gemini-3.5-flash"
+    else:
+        active_model = model or ("gemini-3.5-flash" if os.environ.get("RENDER") == "true" else llm.DEFAULT_MODEL)
 
     if user:
         trial_status = database.get_user_trial_status(user)
@@ -450,7 +481,7 @@ async def run_research(payload: dict, user: Optional[dict] = Depends(auth.get_op
 
     t0 = time.time()
     try:
-        pipeline = ResearchPipeline(model=model)
+        pipeline = ResearchPipeline(model=active_model)
         result = await pipeline.run(query)
 
         elapsed_sec = time.time() - t0
@@ -464,7 +495,7 @@ async def run_research(payload: dict, user: Optional[dict] = Depends(auth.get_op
             session_id = database.save_session(
                 query=query,
                 final_report=result.final_report,
-                model=model,
+                model=active_model,
                 duration=duration_str,
                 sub_questions=result.sub_questions,
                 worker_results=worker_dicts,

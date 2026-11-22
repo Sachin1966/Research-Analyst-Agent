@@ -236,38 +236,53 @@ async function fetchConfig() {
     }
 }
 
-// Fetch available Ollama models
+// Fetch available AI models (Gemini for mobile/cloud, Ollama for local)
 async function fetchModels() {
     try {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768 || window.location.hostname.includes("onrender.com");
+        
         const response = await fetch(`${getApiBase()}/api/models`);
         if (!response.ok) throw new Error("Models endpoint error");
         const data = await response.json();
         
         modelSelect.innerHTML = '';
+        const models = (data.models && data.models.length > 0) ? data.models : ["gemini-3.5-flash", "llama3:latest"];
         
-        if (data.models && data.models.length > 0) {
-            data.models.forEach(model => {
-                const option = document.createElement('option');
-                option.value = model;
-                option.textContent = model;
-                if (model.startsWith('llama3')) {
-                    option.selected = true;
-                }
-                modelSelect.appendChild(option);
-            });
-            fetchConfig();
-        } else {
-            ["llama3:latest", "llama3:8b", "mistral:latest"].forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m;
-                opt.textContent = m;
-                if (m === 'llama3:latest') opt.selected = true;
-                modelSelect.appendChild(opt);
-            });
+        let hasSelected = false;
+        models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            if (model.includes('gemini')) {
+                option.textContent = `✨ ${model} (Google Gemini Cloud)`;
+            } else {
+                option.textContent = `💻 ${model} (Local Ollama)`;
+            }
+            
+            // Automatically select Gemini on mobile or Render
+            if ((isMobile || data.is_mobile) && model.includes('gemini') && !hasSelected) {
+                option.selected = true;
+                hasSelected = true;
+            } else if (!isMobile && model.startsWith('llama3') && !hasSelected) {
+                option.selected = true;
+                hasSelected = true;
+            }
+            modelSelect.appendChild(option);
+        });
+
+        if (!hasSelected && modelSelect.options.length > 0) {
+            modelSelect.options[0].selected = true;
         }
+
+        if ((isMobile || data.is_mobile) && ollamaStatus) {
+            ollamaStatus.textContent = "Google Gemini Live";
+            ollamaStatus.className = "status-badge online";
+            ollamaStatus.title = "Connected to Google Gemini Cloud API";
+        }
+        
+        fetchConfig();
     } catch (error) {
         console.error("Error fetching models:", error);
-        modelSelect.innerHTML = '<option value="llama3:latest">llama3:latest (Production)</option>';
+        modelSelect.innerHTML = '<option value="gemini-3.5-flash" selected>✨ gemini-3.5-flash (Google Gemini Cloud)</option>';
     }
 }
 

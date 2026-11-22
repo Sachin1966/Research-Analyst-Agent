@@ -23,24 +23,47 @@ OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "llama3:latest")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest", "gemini-pro-latest"]
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+
 # Check if we should run in DEMO_MODE (either manually requested, or if no LLM service is available)
 DEMO_MODE = os.environ.get("DEMO_MODE") == "1"
 _gemini_disabled = False
 _ollama_disabled = False
 
-if not DEMO_MODE and not GEMINI_API_KEY:
-    try:
-        # Check if Ollama is accessible
-        response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=2)
-        if response.status_code != 200:
-            print("Ollama returned non-200 status code and no GEMINI_API_KEY found. Running in DEMO_MODE.")
-            DEMO_MODE = True
-            _ollama_disabled = True
-    except Exception as e:
-        print(f"Cannot connect to Ollama at {OLLAMA_URL} and no GEMINI_API_KEY found ({e}). Running in DEMO_MODE.")
-        DEMO_MODE = True
-        _ollama_disabled = True
 
+def _call_gemini_api(system: str, user: str, json_format: bool = False, model: str = None) -> str:
+    """Call Google Gemini Generative Language API with candidate fallback."""
+    if not GEMINI_API_KEY:
+        raise ValueError("No GEMINI_API_KEY available")
+
+    requested = model if model and "gemini" in model.lower() else DEFAULT_GEMINI_MODEL
+    # Clean model name if user provided e.g. "gemini-3.5-flash (Cloud AI)"
+    requested_clean = requested.split()[0].replace("models/", "")
+    candidates = [requested_clean] + [m for m in GEMINI_MODELS if m != requested_clean]
+
+    prompt_text = f"{system}\n\nUser Request:\n{user}"
+    payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
+    if json_format:
+        payload["generationConfig"] = {"responseMimeType": "application/json"}
+
+    last_err = None
+    for cand in candidates:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{cand}:generateContent?key={GEMINI_API_KEY}"
+            res = requests.post(url, json=payload, timeout=(6, 25))
+            if res.status_code == 200:
+                data = res.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+            else:
+                err_text = res.text[:120]
+                print(f"Gemini model {cand} returned status {res.status_code}: {err_text}. Trying next candidate...")
+                last_err = f"Status {res.status_code}: {err_text}"
+        except Exception as ex:
+            print(f"Gemini call to {cand} failed: {ex}. Trying next candidate...")
+            last_err = str(ex)
+
+    raise RuntimeError(f"All Gemini candidates failed. Last error: {last_err}")
 
 
 async def call_llm_stream(system: str, user: str, model: str = None):
@@ -54,27 +77,29 @@ async def call_llm_stream(system: str, user: str, model: str = None):
             await asyncio.sleep(0.03)
         return
 
-    if GEMINI_API_KEY and not _gemini_disabled:
+    # Prioritize Gemini if requested, or if on Render, or if Ollama is not available
+    prefer_gemini = (
+        bool(GEMINI_API_KEY) and not _gemini_disabled and (
+            (model and "gemini" in model.lower()) or
+            os.environ.get("RENDER") == "true" or
+            _ollama_disabled
+        )
+    )
+
+    if prefer_gemini:
         try:
-            gemini_model = model if model and "gemini" in model.lower() else "gemini-1.5-flash"
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={GEMINI_API_KEY}"
-            prompt_text = f"{system}\n\nUser Request:\n{user}"
-            payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
-            
-            res = await asyncio.to_thread(requests.post, url, json=payload, timeout=(4, 15))
-            res.raise_for_status()
-            data = res.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            text = await asyncio.to_thread(_call_gemini_api, system, user, False, model)
             chunk_size = 25
             for i in range(0, len(text), chunk_size):
                 yield text[i:i+chunk_size]
                 await asyncio.sleep(0.02)
             return
         except Exception as err:
-            print(f"Gemini API stream error: {err}. Disabling Gemini and falling back...")
-            _gemini_disabled = True
+            print(f"Gemini API streaming failed: {err}. Falling back...")
+            if _ollama_disabled or os.environ.get("RENDER") == "true":
+                _gemini_disabled = True
 
-    if not _ollama_disabled:
+    if not _ollama_disabled and os.environ.get("RENDER") != "true":
         active_model = model or DEFAULT_MODEL
         payload = {
             "model": active_model,
@@ -136,24 +161,24 @@ def call_llm(system: str, user: str, max_tokens: int = 1024, json_format: bool =
     if DEMO_MODE:
         return _demo_response(system, user)
 
-    if GEMINI_API_KEY and not _gemini_disabled:
+    # Prioritize Gemini if requested, or if on Render, or if Ollama is not available
+    prefer_gemini = (
+        bool(GEMINI_API_KEY) and not _gemini_disabled and (
+            (model and "gemini" in model.lower()) or
+            os.environ.get("RENDER") == "true" or
+            _ollama_disabled
+        )
+    )
+
+    if prefer_gemini:
         try:
-            gemini_model = model if model and "gemini" in model.lower() else "gemini-1.5-flash"
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={GEMINI_API_KEY}"
-            prompt_text = f"{system}\n\nUser Request:\n{user}"
-            payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
-            if json_format:
-                payload["generationConfig"] = {"responseMimeType": "application/json"}
-
-            res = requests.post(url, json=payload, timeout=(4, 15))
-            res.raise_for_status()
-            data = res.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            return _call_gemini_api(system, user, json_format, model)
         except Exception as e:
-            print(f"Gemini API call failed ({e}). Disabling Gemini for this session and falling back...")
-            _gemini_disabled = True
+            print(f"Gemini API call failed ({e}). Falling back...")
+            if _ollama_disabled or os.environ.get("RENDER") == "true":
+                _gemini_disabled = True
 
-    if not _ollama_disabled:
+    if not _ollama_disabled and os.environ.get("RENDER") != "true":
         active_model = model or DEFAULT_MODEL
 
         payload = {
